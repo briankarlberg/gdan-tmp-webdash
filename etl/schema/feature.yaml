@@ -1,0 +1,24 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: Feature
+type: object
+description: >
+  A feature used for model training. It could represent gene mutation, copy number, or expression.
+additionalProperties: false
+
+required:
+  - gid
+  - label
+
+properties:
+  gid:
+    $ref: _gids.yaml#/feature_gid
+  label:
+    const: Feature
+  type:
+    type: string
+    enum:
+      - gene_expression
+      - mutation
+      - cna
+      - methylation

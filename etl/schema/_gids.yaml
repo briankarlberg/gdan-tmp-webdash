@@ -1,0 +1,33 @@
+id: _gids
+
+edge_gid:
+  type: string
+  pattern: "^\\(.*\\)-.*->\\(.*\\)$"
+
+cancer_gid:
+  type: string
+  pattern: "^Cancer:*"
+
+subtype_gid:
+  type: string
+  pattern: "^Subtype:*"
+
+sample_gid:
+  type: string
+  pattern: "^Sample:*"
+
+feature_gid:
+  type: string
+  pattern: "^Feature:*"
+
+model_gid:
+  type: string
+  pattern: "^Model:*"
+
+split_gid:
+  type: string
+  pattern: "^Split:*"
+
+prediction_gid:
+  type: string
+  pattern: "^Prediction:*"

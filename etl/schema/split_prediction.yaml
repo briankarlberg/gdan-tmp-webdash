@@ -1,0 +1,23 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: Split_Prediction
+type: object
+additionalProperties: false
+
+required:
+  - gid
+  - label
+  - from
+  - to
+
+properties:
+  gid:
+    $ref: _gids.yaml#/edge_gid
+  label:
+    const: predictions
+  backref:
+    const: split
+  from:
+    $ref: _gids.yaml#/split_gid
+  to:
+    $ref: _gids.yaml#/prediction_gid

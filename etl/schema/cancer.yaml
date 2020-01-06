@@ -1,0 +1,17 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: Cancer
+type: object
+description: >
+  A TCGA cancer cohort
+additionalProperties: false
+
+required:
+  - gid
+  - label
+
+properties:
+  gid:
+    $ref: _gids.yaml#/cancer_gid
+  label:
+    const: Cancer

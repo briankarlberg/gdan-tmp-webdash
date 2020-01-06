@@ -1,0 +1,23 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: Split
+type: object
+description: >
+  A split defines a training or testing cohort.
+additionalProperties: false
+
+required:
+  - gid
+  - label
+  - repeat
+  - fold
+
+properties:
+  gid:
+    $ref: _gids.yaml#/split_gid
+  label:
+    const: Split
+  repeat:
+    type: integer
+  fold:
+    type: integer

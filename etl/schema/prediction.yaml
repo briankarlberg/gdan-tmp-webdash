@@ -1,0 +1,20 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: Prediction
+type: object
+description: >
+  A subtype prediction for a single sample.
+additionalProperties: false
+
+required:
+  - gid
+  - label
+  - subtype_id
+
+properties:
+  gid:
+    $ref: _gids.yaml#/prediction_gid
+  label:
+    const: Prediction
+  subtype_id:
+    $ref: _gids.yaml#/subtype_gid

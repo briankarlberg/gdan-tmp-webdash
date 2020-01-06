@@ -1,0 +1,23 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: Cancer_Sample
+type: object
+additionalProperties: false
+
+required:
+  - gid
+  - label
+  - from
+  - to
+
+properties:
+  gid:
+    $ref: _gids.yaml#/edge_gid
+  label:
+    const: samples
+  backref:
+    const: cancer
+  from:
+    $ref: _gids.yaml#/cancer_gid
+  to:
+    $ref: _gids.yaml#/sample_gid

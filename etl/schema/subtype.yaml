@@ -1,0 +1,17 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: Subtype
+type: object
+description: >
+  A GDAN TMP defined subtype
+additionalProperties: false
+
+required:
+  - gid
+  - label
+
+properties:
+  gid:
+    $ref: _gids.yaml#/subtype_gid
+  label:
+    const: Subtype

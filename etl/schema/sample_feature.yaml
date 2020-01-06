@@ -1,0 +1,23 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: Sample_Feature
+type: object
+additionalProperties: false
+
+required:
+  - gid
+  - label
+  - from
+  - to
+
+properties:
+  gid:
+    $ref: _gids.yaml#/edge_gid
+  label:
+    const: features
+  backref:
+    const: samples
+  from:
+    $ref: _gids.yaml#/sample_gid
+  to:
+    $ref: _gids.yaml#/feature_gid
