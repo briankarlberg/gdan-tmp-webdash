@@ -9,12 +9,31 @@ additionalProperties: false
 required:
   - gid
   - label
-  - subtype_id
+  - predicted_subtype
+  - actual_subtype
+  - type
+  - repeat
+  - fold
 
 properties:
   gid:
     $ref: _gids.yaml#/prediction_gid
   label:
     const: Prediction
-  subtype_id:
+  predicted_value:
     $ref: _gids.yaml#/subtype_gid
+  actual_value:
+    $ref: _gids.yaml#/subtype_gid
+  metadata:
+    type:
+      - 'null'
+      - object
+  type:
+    type: string
+    enum:
+      - training
+      - testing
+  repeat:
+    type: integer
+  fold:
+    type: integer

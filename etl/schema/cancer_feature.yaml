@@ -1,6 +1,6 @@
 $schema: "http://json-schema.org/draft-07/schema#"
 
-id: Sample_Feature
+id: Cancer_Feature
 type: object
 additionalProperties: false
 
@@ -9,7 +9,6 @@ required:
   - label
   - from
   - to
-  - value
 
 properties:
   gid:
@@ -17,10 +16,8 @@ properties:
   label:
     const: features
   backref:
-    const: samples
+    const: cancers
   from:
-    $ref: _gids.yaml#/sample_gid
+    $ref: _gids.yaml#/cancer_gid
   to:
     $ref: _gids.yaml#/feature_gid
-  value:
-    type: number

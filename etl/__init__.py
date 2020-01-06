@@ -5,7 +5,7 @@ from copy import deepcopy
 from functools import partial
 from dictionaryutils import DataDictionary, load_schemas_from_dir
 
-from etl.gid import edge_gid, vertex_gid
+from etl.gid import vertex_gid
 
 
 class CustomDataDictionary(DataDictionary):
@@ -92,7 +92,8 @@ class ClassInstance:
         try:
             jsonschema.validate(data, self.schema())
         except Exception as e:
-            print(data, file=sys.stderr)
+            print("instance:", data, file=sys.stderr)
+            print("schema:", self._schema, file=sys.stderr)
             raise e
 
     def label(self):
@@ -194,7 +195,7 @@ for k, schema in _schema.schema.items():
                 **self.props()
             )
             backref_cls._backref = cls
-            cls.backref = lambda self: self._backref(
+            backref_cls.backref = lambda self: self._backref(
                 _from=self._to,
                 _to=self._from,
                 **self.props()

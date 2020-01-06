@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+.tox/
+.mypy_cache/
+
+# Editor Temps
+.*.sw?
+*~
+\#*\#
+.desktop
+
+/venv
+
+/data
+/outputs
