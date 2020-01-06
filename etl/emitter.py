@@ -113,7 +113,7 @@ class BaseEmitter:
         self.rate.close()
 
     def emit_edge(self, obj: Edge):
-        obj.validate()
+        # obj.validate()
         dumped = {
             "_id": obj.gid(),
             "gid": obj.gid(),
@@ -126,7 +126,7 @@ class BaseEmitter:
         return dumped
 
     def emit_vertex(self, obj: Vertex):
-        obj.validate()
+        # obj.validate()
         dumped = {
             "_id": obj.gid(),
             "gid": obj.gid(),

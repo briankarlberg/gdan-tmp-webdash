@@ -1,0 +1,6 @@
+Database: mongo
+
+MongoDB:
+  URL: mongo:27017
+  DBName: grip
+  UseAggregationPipeline: true

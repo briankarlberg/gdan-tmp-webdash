@@ -1,9 +1,5 @@
 import argparse
 import csv
-from glob import glob
-from multiprocessing import Pool
-from itertools import product
-import os
 
 from etl.emitter import new_emitter
 from etl import (Cancer, Subtype, Sample, Split,
@@ -25,11 +21,9 @@ def transform_one(input_matrix,
             cancer_id = list(line.keys())[0]
             subtype_id = line["Labels"]
             sample_id = line[cancer_id]
-
             cancer = Cancer(gid=Cancer.make_gid(cancer_id))
 
             if i == 0:
-                emitter.emit_vertex(cancer)
                 for rf in list(line.keys())[2:]:
                     parts = rf.split(":")
                     repeat = int(parts[0][1:])
@@ -87,18 +81,13 @@ if __name__ == "__main__":
         '--input-matrix', '-i',
         type=str,
         required=True,
-        help='CVfold matrix (used as pattern for glob)'
+        help='CVfold matrix'
     )
     parser.add_argument(
-        '--max-procs', '-p',
-        type=int,
-        default=4,
-        help='number of files to process in parallel'
+        '--emitter-prefix', '-p',
+        type=str,
+        required=True,
+        help='emitter prefix'
     )
     args = parser.parse_args()
-    files = glob(args.input_matrix)
-    projects = [os.path.basename(f).split('_')[0] for f in files]
-    wp = Pool(args.max_procs)
-    results = wp.starmap(transform_one, product(files, projects))
-    print(results)
-    # transform_one(args.input_matrix, args.prefix)
+    transform_one(args.input_matrix, args.emitter_prefix)

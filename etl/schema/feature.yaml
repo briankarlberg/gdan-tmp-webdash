@@ -9,16 +9,29 @@ additionalProperties: false
 required:
   - gid
   - label
+  - datatype
+  - platform_id1
+  - platform_id2
+  - feature_id1
+  - feature_id2
 
 properties:
   gid:
     $ref: _gids.yaml#/feature_gid
   label:
     const: Feature
-  type:
+  datatype:
     type: string
     enum:
-      - gene_expression
-      - mutation
-      - cna
-      - methylation
+      - "B"
+      - "I"
+      - "C"
+      - "N"
+  platform_id1:
+    type: string
+  platform_id2:
+    type: string
+  feature_id1:
+    type: string
+  feature_id2:
+    type: string
