@@ -3,7 +3,8 @@ import csv
 
 from etl.emitter import new_emitter
 from etl import (Cancer, Subtype, Sample, Split,
-                 Cancer_Subtype, Sample_Subtype, Sample_Split)
+                 Cancer_Subtype, Cancer_Sample,
+                 Sample_Subtype, Sample_Split)
 
 
 def transform_one(input_matrix,
@@ -54,6 +55,13 @@ def transform_one(input_matrix,
                 Sample_Subtype(
                     _from=sample.gid(),
                     _to=subtype.gid()
+                ),
+                emit_backref=True
+            )
+            emitter.emit_edge(
+                Cancer_Sample(
+                    _from=cancer.gid(),
+                    _to=sample.gid()
                 ),
                 emit_backref=True
             )

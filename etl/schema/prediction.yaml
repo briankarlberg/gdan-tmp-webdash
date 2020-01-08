@@ -12,15 +12,17 @@ required:
   - predicted_subtype
   - actual_subtype
   - type
+  - repeat
+  - fold
 
 properties:
   gid:
     $ref: _gids.yaml#/prediction_gid
   label:
     const: Prediction
-  predicted_subtype:
+  predicted_value:
     $ref: _gids.yaml#/subtype_gid
-  actual_subtype:
+  actual_value:
     $ref: _gids.yaml#/subtype_gid
   metadata:
     type:
@@ -31,3 +33,7 @@ properties:
     enum:
       - training
       - testing
+  repeat:
+    type: integer
+  fold:
+    type: integer

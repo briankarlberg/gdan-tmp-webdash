@@ -195,7 +195,7 @@ for k, schema in _schema.schema.items():
                 **self.props()
             )
             backref_cls._backref = cls
-            cls.backref = lambda self: self._backref(
+            backref_cls.backref = lambda self: self._backref(
                 _from=self._to,
                 _to=self._from,
                 **self.props()

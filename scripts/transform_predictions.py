@@ -3,9 +3,9 @@ import csv
 import json
 
 from etl.emitter import new_emitter
-from etl import (Sample, Split, Model, Prediction, Subtype,
-                 Sample_Prediction, Split_Prediction, # Model_Prediction,
-                 Model_Split)
+from etl import (Sample, Split, Model, Prediction, Cancer, Subtype,
+                 Sample_Prediction, Split_Prediction,  Model_Prediction,
+                 Model_Split, Model_Cancer)
 
 
 def transform_one(input_matrix,
@@ -37,11 +37,19 @@ def transform_one(input_matrix,
             for model_id, pred_val in line.items():
                 if model_id in [cancer_id, "Repeat", "Fold", "Label", "Test"]:
                     continue
+
                 model = Model(
                     gid=Model.make_gid("%s:%s" % (cancer_id, model_id)),
                 )
                 if model.gid() not in emitted_models:
                     emitter.emit_vertex(model)
+                    emitter.emit_edge(
+                        Model_Cancer(
+                            _from=model.gid(),
+                            _to=Cancer.make_gid(cancer_id)
+                        ),
+                        emit_backref=True
+                    )
 
                 metadata = None
                 prediction = None
@@ -57,23 +65,18 @@ def transform_one(input_matrix,
 
                 prediction = Prediction(
                     gid=Prediction.make_gid("%s:%s:%s:%s" % (cancer_id, model_id, split_id, sample_id)),
-                    predicted_subtype=Subtype.make_gid("%s:%s" % (cancer_id, prediction)),
-                    actual_subtype=Subtype.make_gid("%s:%s" % (cancer_id, line["Label"])),
+                    predicted_value=Subtype.make_gid("%s:%s" % (cancer_id, prediction)),
+                    actual_value=Subtype.make_gid("%s:%s" % (cancer_id, line["Label"])),
                     metadata=metadata,
-                    type="testing" if line["Test"] == 1 else "training"
+                    type="testing" if line["Test"] == 1 else "training",
+                    repeat=int(repeat),
+                    fold=int(fold)
                 )
                 emitter.emit_vertex(prediction)
 
                 emitter.emit_edge(
-                    Model_Split(
+                    Model_Prediction(
                         _from=model.gid(),
-                        _to=Split.make_gid(split_id),
-                    ),
-                    emit_backref=True
-                )
-                emitter.emit_edge(
-                    Split_Prediction(
-                        _from=Split.make_gid(split_id),
                         _to=prediction.gid(),
                     ),
                     emit_backref=True
@@ -85,16 +88,22 @@ def transform_one(input_matrix,
                     ),
                     emit_backref=True
                 )
+                emitter.emit_edge(
+                    Model_Split(
+                         _from=model.gid(),
+                        _to=Split.make_gid(split_id),
+                    ),
+                    emit_backref=True
+                )
+                emitter.emit_edge(
+                    Split_Prediction(
+                        _from=Split.make_gid(split_id),
+                        _to=prediction.gid(),
+                     ),
+                    emit_backref=True
+                )
 
                 # TODO mode of predicitons for given sample / model?
-                # emitter.emit_edge(
-                #     Model_Prediction(
-                #         _from=model.gid(),
-                #         _to=prediction.gid(),
-                #     ),
-                #     emit_backref=True
-                # )
-
                 # TODO: model -> feature edges
 
     emitter.close()
