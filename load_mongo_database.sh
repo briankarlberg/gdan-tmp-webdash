@@ -12,6 +12,8 @@ fi
 graph=$1
 file_manifest=$(realpath $2)
 
+GRIP_HOST=${GRIP_HOST:-localhost}
+
 echo "checking that all files in the manifest exist"
 for f in $(cat $file_manifest); do
 		if [ ! -f $f ]; then
@@ -23,14 +25,14 @@ done
 while true; do
     read -p "Do you wish to drop the graph before proceeding with the database load? " yn
     case $yn in
-        [Yy]* ) echo "dropping graph: $graph"; grip drop $graph --host grip:8202; break;;
+        [Yy]* ) echo "dropping graph: $graph"; grip drop $graph --host $GRIP_HOST:8202 || true; break;;
         [Nn]* ) break;;
         * ) echo "Please answer yes or no.";;
     esac
 done
 
 # ensure graph exists
-grip create $graph --host grip:8202
+grip create $graph --host $GRIP_HOST:8202
 
 DBNAME=${DBNAME:-grip}
 MONGO_INSERTION_WORKERS=${MONGO_INSERTION_WORKERS:-8}

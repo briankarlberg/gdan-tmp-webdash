@@ -56,7 +56,7 @@ def transform_one(input_matrix,
                     prediction = pred_val
 
                 prediction = Prediction(
-                    gid=Prediction.make_gid("%s:%s:%s" % (cancer_id, model_id, sample_id)),
+                    gid=Prediction.make_gid("%s:%s:%s:%s" % (cancer_id, model_id, split_id, sample_id)),
                     predicted_subtype=Subtype.make_gid("%s:%s" % (cancer_id, prediction)),
                     actual_subtype=Subtype.make_gid("%s:%s" % (cancer_id, line["Label"])),
                     metadata=metadata,
