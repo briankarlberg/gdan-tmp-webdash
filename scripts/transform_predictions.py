@@ -68,7 +68,7 @@ def transform_one(input_matrix,
                     predicted_value=Subtype.make_gid("%s:%s" % (cancer_id, prediction)),
                     actual_value=Subtype.make_gid("%s:%s" % (cancer_id, line["Label"])),
                     metadata=metadata,
-                    type="testing" if line["Test"] == 1 else "training",
+                    type="testing" if line["Test"] == "1" else "training",
                     repeat=int(repeat),
                     fold=int(fold)
                 )
