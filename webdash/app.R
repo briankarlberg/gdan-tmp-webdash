@@ -16,8 +16,9 @@ ui <- dashboardPage(
     dashboardHeader(title = "GDAN TMP"),
     dashboardSidebar(
         sidebarMenu(
-            menuItem("Models", tabName = "predictions"),
-            menuItem("Features", tabName = "features")
+            menuItem("Predictions", tabName = "predictions"),
+            menuItem("Features", tabName = "features"),
+            menuItem("Models", tabName = "models")
         ),
         br(),
         selectInput(inputId = "cancer_selection", label = "Cancer Type", choices = cancers)
@@ -50,7 +51,7 @@ ui <- dashboardPage(
                         )
                     )
                 ),
-                h1("Subtype Prediction Stability Accross Repeat Folds"),
+                h1("Subtype Prediction Stability Across Repeat Folds"),
                 fluidRow(
                     box(
                         width = 12,
@@ -91,6 +92,14 @@ ui <- dashboardPage(
                         withSpinner(plotlyOutput("featureDetails", height = "100%", width = "98%"))
                     )
                 ),
+            ),
+            tabItem(
+                tabName = "models",
+                h1("Models"),
+                box(
+                    width = 12,
+                    DT::dataTableOutput("modelTable")
+                )
             )
         )
     )
@@ -124,6 +133,11 @@ feature_vals <- data.table::fread("/Users/strucka/Projects/gdan-tmp/data/v7-matr
     tidyr::gather(-ACC, -Labels, key="feature", value="value")
 
 server <- function(input, output) {
+    ##--------------------
+    ## Models Tab
+    ##--------------------
+    output$modelTable <- DT::renderDataTable({})
+
     ##--------------------
     ## Features Tab
     ##--------------------
@@ -211,13 +225,14 @@ server <- function(input, output) {
                 labs(y = "", x = "", fill = "") +
                 scale_y_continuous(expand = expand_scale(add = c(0.01, 0.05))) +
                 coord_flip() +
-                theme_minimal(10) +
+                theme_minimal() +
                 theme(axis.ticks.y = element_blank(),
+                      axis.text.y = element_text(size = 7),
                       panel.grid.major = element_blank()) +
                 facet_wrap(~sample_id, ncol = 2)
             ggplotly(
                 g,
-                height = 15*length(unique(df_subset$model_id))*ceiling(length(input$sample_selection)/2)
+                height = 10*length(unique(df_subset$model_id))*ceiling(length(input$sample_selection)/2)
             )
         } else {
             g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Samples"),
@@ -255,6 +270,7 @@ server <- function(input, output) {
             dplyr::pull(actual_value)
 
         tpr_model <- preds_df %>%
+            dplyr::filter(type == input$set_selection) %>%
             group_by(model_id) %>%
             summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
                       total = n()) %>%
@@ -263,6 +279,7 @@ server <- function(input, output) {
             pull(tpr)
 
         tpr_sample <- preds_df %>%
+            dplyr::filter(type == input$set_selection) %>%
             group_by(sample_id) %>%
             summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
                       total = n()) %>%
