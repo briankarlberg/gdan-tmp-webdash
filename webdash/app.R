@@ -8,6 +8,9 @@ library(gripql)
 
 source("helpers.R")
 
+# cancers <-  getCancers()
+cancers <- c("ACC", "BRCA", "CESC", "LUAD", "PRAD")
+
 ui <- dashboardPage(
     skin = "black",
     dashboardHeader(title = "GDAN TMP"),
@@ -17,14 +20,19 @@ ui <- dashboardPage(
             menuItem("Features", tabName = "features")
         ),
         br(),
-        selectInput(inputId = "cancer_selection", label = "Cancer Type", choices = getCancers())
-
+        selectInput(inputId = "cancer_selection", label = "Cancer Type", choices = cancers)
     ),
     dashboardBody(
         tabItems(
             tabItem(
                 tabName = "predictions",
                 h1("Compare Models"),
+                fluidRow(
+                    box(
+                        width = 12,
+                        selectInput(inputId = "set_selection", label = "Data Subset", choices = c("testing", "training"), selected = "testing")
+                    )
+                ),
                 fluidRow(
                     box(
                         width = 12,
@@ -180,16 +188,6 @@ server <- function(input, output) {
     ##--------------------
 
     # preds_df <- getPredictions(input$cancer_selection)
-    avg_pred <- preds_df %>%
-        dplyr::group_by(model_id, sample_id) %>%
-        dplyr::count(predicted_value) %>%
-        dplyr::mutate(freq = n / sum(n)) %>%
-        dplyr::arrange(desc(n)) %>%
-        dplyr::slice(1) %>%
-        dplyr::ungroup() %>%
-        dplyr::mutate(
-            predicted_value = as.numeric(predicted_value)
-        )
     nsubtypes <- length(levels(preds_df$actual_value))
     colors <- viridis::viridis(nsubtypes)
     col_map <- as.list(colors)
@@ -205,7 +203,8 @@ server <- function(input, output) {
     output$samplePredDetails <- renderPlotly({
         if (length(input$sample_selection) > 0) {
             df_subset <- preds_df %>%
-                filter(sample_id %in% input$sample_selection)
+                dplyr::filter(type == input$set_selection) %>%
+                dplyr::filter(sample_id %in% input$sample_selection)
             g <- ggplot(df_subset, aes(x = model_id)) +
                 geom_bar(aes(fill = predicted_value), position = "fill") +
                 scale_fill_manual(values=c(as.character(col_map), "grey")) +
@@ -230,6 +229,17 @@ server <- function(input, output) {
     })
 
     output$predHeatmap <- renderIheatmap({
+        avg_pred <- preds_df %>%
+            dplyr::filter(type == input$set_selection) %>%
+            dplyr::group_by(model_id, sample_id) %>%
+            dplyr::count(predicted_value) %>%
+            dplyr::mutate(freq = n / sum(n)) %>%
+            dplyr::arrange(desc(n)) %>%
+            dplyr::slice(1) %>%
+            dplyr::ungroup() %>%
+            dplyr::mutate(
+                predicted_value = as.numeric(predicted_value)
+            )
 
         avg_pred_wide <- avg_pred %>%
             dplyr::select(-n, -freq) %>%
