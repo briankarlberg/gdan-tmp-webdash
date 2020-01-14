@@ -96,9 +96,26 @@ ui <- dashboardPage(
             tabItem(
                 tabName = "models",
                 h1("Models"),
-                box(
-                    width = 12,
-                    DT::dataTableOutput("modelTable")
+                fluidRow(
+                    box(
+                        width = 12,
+                        withSpinner(DT::DTOutput("modelTable"))
+                    ),
+                    box(
+                        width = 4,
+                        title = "Selected Models",
+                        textOutput("selectedModels")
+                    ),
+                    box(
+                        width = 4,
+                        title = "Total Features",
+                        textOutput("totalFeatures")
+                    ),
+                    box(
+                        width = 4,
+                        title = "Avg Accuracy",
+                        textOutput("avgAccuracy")
+                    )
                 )
             )
         )
@@ -136,7 +153,39 @@ server <- function(input, output) {
     ##--------------------
     ## Models Tab
     ##--------------------
-    output$modelTable <- DT::renderDataTable({})
+    output$modelTable <- DT::renderDT({
+        preds_df %>%
+            dplyr::group_by(model_id, type) %>%
+            dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
+                             total = n()) %>%
+            ungroup() %>%
+            dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
+            dplyr::select(model_id, type, tpr) %>%
+            tidyr::spread(type, tpr) %>%
+            rename(Model = model_id, TPR_Training = training, TPR_testing = testing) %>%
+            mutate(nfeatures = NA, GEXP = NA, METH = NA, MUTA = NA, CNV = NA)
+    },
+    rownames = FALSE,
+    options = list(
+        scrollX = TRUE,
+        order = list(1, "desc")
+        )
+    )
+
+    output$selectedModels <- renderText({
+        if (length(input$modelTable_rows_selected) > 0) {
+            preds_df %>%
+                dplyr::group_by(model_id, type) %>%
+                dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
+                                 total = n()) %>%
+                ungroup() %>%
+                dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
+                dplyr::select(model_id, type, tpr) %>%
+                tidyr::spread(type, tpr) %>%
+                dplyr::slice(input$modelTable_rows_selected) %>%
+                dplyr::pull(model_id)
+        }
+    }, sep = ", ")
 
     ##--------------------
     ## Features Tab
