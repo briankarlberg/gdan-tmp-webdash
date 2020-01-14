@@ -9,7 +9,33 @@ library(gripql)
 source("helpers.R")
 
 # cancers <-  getCancers()
-cancers <- c("ACC", "BRCA", "CESC", "LUAD", "PRAD")
+cancers <- c("ACC")
+preds_df <- readr::read_csv("/Users/strucka/Projects/gdan-tmp/webdash/acc_predictions.csv") %>%
+    dplyr::mutate(
+        model_id = stringr::str_replace(model_id,
+                                        sprintf("Model:%s:", "ACC"),
+                                        ""),
+        predicted_value = as.factor(
+            stringr::str_replace(predicted_value,
+                                 "Subtype:",
+                                 "")
+        ),
+        actual_value = as.factor(
+            stringr::str_replace(actual_value,
+                                 "Subtype:",
+                                 "")
+        )
+    )
+
+features <- readr::read_delim("/Users/strucka/Projects/gdan-tmp/fbed-tests/ACC.tsv",
+                              delim = "\t",
+                              col_names = c("model_id", "feature")) %>%
+    mutate(feature = purrr::map(feature, jsonlite::fromJSON)) %>%
+    tidyr::unnest(feature)
+
+feature_vals <- data.table::fread("/Users/strucka/Projects/gdan-tmp/data/v7-matrices/ACC_v7_20191227.tsv") %>%
+    as_tibble() %>%
+    tidyr::gather(-ACC, -Labels, key="feature", value="value")
 
 ui <- dashboardPage(
     skin = "black",
@@ -122,32 +148,6 @@ ui <- dashboardPage(
     )
 )
 
-preds_df <- readr::read_csv("/Users/strucka/Projects/gdan-tmp/webdash/acc_predictions.csv") %>%
-    dplyr::mutate(
-        model_id = stringr::str_replace(model_id,
-                                        sprintf("Model:%s:", "ACC"),
-                                        ""),
-        predicted_value = as.factor(
-            stringr::str_replace(predicted_value,
-                                 "Subtype:",
-                                 "")
-        ),
-        actual_value = as.factor(
-            stringr::str_replace(actual_value,
-                                 "Subtype:",
-                                 "")
-        )
-    )
-
-features <- readr::read_delim("/Users/strucka/Projects/gdan-tmp/fbed-tests/ACC.tsv",
-                              delim = "\t",
-                              col_names = c("model_id", "feature")) %>%
-    mutate(feature = purrr::map(feature, jsonlite::fromJSON)) %>%
-    tidyr::unnest(feature)
-
-feature_vals <- data.table::fread("/Users/strucka/Projects/gdan-tmp/data/v7-matrices/ACC_v7_20191227.tsv") %>%
-    as_tibble() %>%
-    tidyr::gather(-ACC, -Labels, key="feature", value="value")
 
 server <- function(input, output) {
     ##--------------------
@@ -169,7 +169,7 @@ server <- function(input, output) {
     options = list(
         scrollX = TRUE,
         order = list(1, "desc")
-        )
+    )
     )
 
     output$selectedModels <- renderText({
@@ -222,9 +222,9 @@ server <- function(input, output) {
                 dplyr::filter(feature %in% input$feature_selection) %>%
                 mutate(subtype = as.factor(Labels))
             g <- ggplot(feature_subset,
-                       aes(x = subtype,
-                           y = value,
-                           fill = subtype)) +
+                        aes(x = subtype,
+                            y = value,
+                            fill = subtype)) +
                 geom_violin(colour = NA, na.rm = T, alpha = 0.5) +
                 geom_jitter(width = 0.05, height = 0.05) +
                 coord_flip() +
@@ -320,21 +320,21 @@ server <- function(input, output) {
 
         tpr_model <- preds_df %>%
             dplyr::filter(type == input$set_selection) %>%
-            group_by(model_id) %>%
-            summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                      total = n()) %>%
-            mutate(tpr = correct / total) %>%
-            arrange(base::match(model_id, rownames(pred_mat))) %>%
-            pull(tpr)
+            dplyr::group_by(model_id) %>%
+            dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
+                             total = n()) %>%
+            dplyr::mutate(tpr = correct / total) %>%
+            dplyr::arrange(base::match(model_id, rownames(pred_mat))) %>%
+            dplyr::pull(tpr)
 
         tpr_sample <- preds_df %>%
             dplyr::filter(type == input$set_selection) %>%
-            group_by(sample_id) %>%
-            summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                      total = n()) %>%
-            mutate(tpr = correct / total) %>%
-            arrange(base::match(sample_id, colnames(pred_mat))) %>%
-            pull(tpr)
+            dplyr::group_by(sample_id) %>%
+            dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
+                             total = n()) %>%
+            dplyr::mutate(tpr = correct / total) %>%
+            dplyr::arrange(base::match(sample_id, colnames(pred_mat))) %>%
+            dplyr::pull(tpr)
 
         colClust <- order.dendrogram(as.dendrogram(hclustfunc(t(pred_mat))))
         rowClust <- order.dendrogram(as.dendrogram(hclustfunc(pred_mat)))
