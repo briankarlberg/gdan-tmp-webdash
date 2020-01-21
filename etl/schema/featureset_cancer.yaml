@@ -1,0 +1,23 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: FeatureSet_Cancer
+type: object
+additionalProperties: false
+
+required:
+  - gid
+  - label
+  - from
+  - to
+
+properties:
+  gid:
+    $ref: _gids.yaml#/edge_gid
+  label:
+    const: cancers
+  backref:
+    const: featuresets
+  from:
+    $ref: _gids.yaml#/featureset_gid
+  to:
+    $ref: _gids.yaml#/cancer_gid

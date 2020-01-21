@@ -3,7 +3,8 @@ import csv
 import json
 
 from etl.emitter import new_emitter
-from etl import (Feature, FeatureSet, FeatureSet_Feature)
+from etl import (Cancer, Feature, FeatureSet,
+                 FeatureSet_Feature, FeatureSet_Cancer)
 
 
 def transform_one(input_matrix,
@@ -16,13 +17,23 @@ def transform_one(input_matrix,
 
     with open(input_matrix, "r") as fh:
         for line in csv.DictReader(filter(lambda row: row[0] != '#', fh), delimiter="\t"):
-            # cancers = json.loads(line["TCGA_Projects"])
+            cancers = json.loads(line["TCGA_Projects"])
             features = json.loads(line["Features"])
 
             fs = FeatureSet(
                 gid=FeatureSet.make_gid(line["Feature_Set_ID"])
             )
             emitter.emit_vertex(fs)
+
+            for c in cancers:
+                emitter.emit_edge(
+                    FeatureSet_Cancer(
+                        _from=fs.gid(),
+                        _to=Cancer.make_gid(c)
+                    ),
+                    emit_backref=True
+                )
+
             for f in features:
                 emitter.emit_edge(
                     FeatureSet_Feature(
