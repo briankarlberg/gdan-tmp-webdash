@@ -20,6 +20,10 @@ feature_gid:
   type: string
   pattern: "^Feature:*"
 
+featureset_gid:
+  type: string
+  pattern: "^FeatureSet:*"
+
 model_gid:
   type: string
   pattern: "^Model:*"
