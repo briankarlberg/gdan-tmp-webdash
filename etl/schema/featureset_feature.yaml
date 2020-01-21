@@ -1,6 +1,6 @@
 $schema: "http://json-schema.org/draft-07/schema#"
 
-id: Model_Prediction
+id: FeatureSet_Feature
 type: object
 additionalProperties: false
 
@@ -14,10 +14,10 @@ properties:
   gid:
     $ref: _gids.yaml#/edge_gid
   label:
-    const: predictions
+    const: features
   backref:
-    const: models
+    const: featuresets
   from:
-    $ref: _gids.yaml#/model_gid
+    $ref: _gids.yaml#/featureset_gid
   to:
-    $ref: _gids.yaml#/prediction_gid
+    $ref: _gids.yaml#/feature_gid

@@ -3,9 +3,9 @@ import csv
 import json
 
 from etl.emitter import new_emitter
-from etl import (Sample, Split, Model, Prediction, Cancer, Subtype,
+from etl import (Sample, Split, Model, Prediction, Cancer, Subtype, FeatureSet,
                  Sample_Prediction, Split_Prediction,  Model_Prediction,
-                 Model_Split, Model_Cancer)
+                 Model_Split, Model_Cancer, Model_FeatureSet)
 
 
 def transform_one(input_matrix,
@@ -20,7 +20,14 @@ def transform_one(input_matrix,
     i = 0
     with open(input_matrix, "r") as fh:
         for line in csv.DictReader(filter(lambda row: row[0]!='#', fh), delimiter="\t"):
-            cancer_id = list(line.keys())[0]
+            cancer_id = None
+            sample_id = None
+            if list(line.keys())[0] != "Sample_ID":
+                cancer_id = list(line.keys())[0]
+                sample_id = line[cancer_id]
+            else:
+                sample_id = line["Sample_ID"]
+                cancer_id = line["Label"].split(":")[0]
             sample_id = line[cancer_id]
             repeat = line["Repeat"][1:] if line["Repeat"].startswith("R") else line["Repeat"]
             fold = line["Fold"][1:] if line["Fold"].startswith("F") else line["Fold"]
@@ -38,6 +45,9 @@ def transform_one(input_matrix,
                 if model_id in [cancer_id, "Repeat", "Fold", "Label", "Test"]:
                     continue
 
+                parts = model_id.split("|")
+                model_id = parts[0]
+
                 model = Model(
                     gid=Model.make_gid("%s:%s" % (cancer_id, model_id)),
                 )
@@ -51,6 +61,16 @@ def transform_one(input_matrix,
                         emit_backref=True
                     )
 
+                    if len(parts) == 4:
+                        feature_set_id = parts[1]
+                        emitter.emit_edge(
+                            Model_FeatureSet(
+                                _from=model.gid(),
+                                _to=FeatureSet.make_gid(feature_set_id)
+                            ),
+                            emit_backref=True
+                        )
+
                 metadata = None
                 prediction = None
                 if model_id.endswith("|p") or pred_val.startswith("{"):
@@ -63,10 +83,13 @@ def transform_one(input_matrix,
                 else:
                     prediction = pred_val
 
+                prediction = prediction if prediction.startswith(cancer_id) else "%s:%s" % (cancer_id, prediction)
+                label = line["Label"] if line["Label"].startswith(cancer_id) else "%s:%s" % (cancer_id, line["Label"])
+
                 prediction = Prediction(
-                    gid=Prediction.make_gid("%s:%s:%s:%s" % (cancer_id, model_id, split_id, sample_id)),
-                    predicted_value=Subtype.make_gid("%s:%s" % (cancer_id, prediction)),
-                    actual_value=Subtype.make_gid("%s:%s" % (cancer_id, line["Label"])),
+                    gid=Prediction.make_gid("%s:%s:%s:%s" % (cancer_id, "|".join(parts), split_id, sample_id)),
+                    predicted_value=Subtype.make_gid(prediction),
+                    actual_value=Subtype.make_gid(label),
                     metadata=metadata,
                     type="testing" if line["Test"] == "1" else "training",
                     repeat=int(repeat),
@@ -90,7 +113,7 @@ def transform_one(input_matrix,
                 )
                 emitter.emit_edge(
                     Model_Split(
-                         _from=model.gid(),
+                        _from=model.gid(),
                         _to=Split.make_gid(split_id),
                     ),
                     emit_backref=True
@@ -117,7 +140,7 @@ if __name__ == "__main__":
         '--input-matrix', '-i',
         type=str,
         required=True,
-        help='CVfold matrix'
+        help='predictions matrix'
     )
     parser.add_argument(
         '--emitter-prefix', '-p',

@@ -1,0 +1,17 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+
+id: FeatureSet
+type: object
+description: >
+  A set of features.
+additionalProperties: false
+
+required:
+  - gid
+  - label
+
+properties:
+  gid:
+    $ref: _gids.yaml#/featureset_gid
+  label:
+    const: Feature
