@@ -60,6 +60,9 @@ getPredictions <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "loca
   fres$sample_id <- sapply(fres$prediction_id,
                            function(x) { strsplit(x, ":")[[1]][7] },
                            USE.NAMES = F)
+  fres$featureset_id <- sapply(fres$prediction_id,
+                               function(x) { strsplit(x, ":")[[1]][2] },
+                               USE.NAMES = F)
   fres %>%
     dplyr::mutate(
       cancer_id = stringr::str_replace(cancer_id,
@@ -96,9 +99,7 @@ getFeatureSets <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "loca
                 "feature_id" = "$f._gid")) %>%
     execute()
 
-  # TODO: flatten
-  fres <- flatten_all(results)
-
+  fres <- do.call(bind_rows, lapply(results, as_tibble))
   fres %>%
     dplyr::mutate(
       cancer_id = stringr::str_replace(cancer_id,
@@ -116,33 +117,34 @@ getFeatureSets <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "loca
     )
 }
 
+within <- function(k, values) {
+  if (length(values) == 0) {
+    values <- list()
+  }
+  if (length(values) == 1) {
+    values <- list(values)
+  }
+  list("condition" = list("key" = k, "value" = values, "condition" = "WITHIN"))
+}
+
 getFeatureVals <- function(features, graph_name = "gdan_tmp", grip_host = "localhost:8201") {
+  selected_features <- paste("Feature", features, sep = ":")
+
   results <- gripql(grip_host) %>%
     graph(graph_name) %>%
     query() %>%
-    V(paste("Feature", features, sep = ":")) %>% as_("f") %>%
-    outE("samples") %>% as_("val") %>%
-    out() %>% as_("s") %>%
-    out("subtype") %>% as_("type") %>%
-    render(
-      list("feature_id" = "$g._gid",
-           "value" = "$val._data.value",
-           "sample_id" = "$s._gid",
-           "subtype_id" = "$type._gid")
-    ) %>%
+    E() %>%
+    hasLabel("samples") %>%
+    has(within("_from", selected_features)) %>%
+    render(list("feature_id" = "$._from", "sample_id" = "$._to", "value" = "$._data.value")) %>%
     execute()
 
-  # TODO: flatten
-  fres <- flatten_all(results)
-
+  fres <- do.call(bind_rows, lapply(results, as_tibble))
   fres %>%
     dplyr::mutate(
       sample_id = stringr::str_replace(sample_id,
                                        "Sample:",
                                        ""),
-      subtype_id = stringr::str_replace(subtype_id,
-                                      "Subtype:",
-                                      ""),
       feature_id = stringr::str_replace(feature_id,
                                         "Feature:",
                                         "")

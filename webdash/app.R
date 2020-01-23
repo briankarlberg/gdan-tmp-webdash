@@ -115,7 +115,7 @@ server <- function(input, output) {
     source("load_test_data.R")
 
     featureSets <- reactive({
-        # getFeatureSets()
+        # getFeatureSets(NULL)
         acc_feature_set
     })
 
@@ -151,6 +151,7 @@ server <- function(input, output) {
                 selectizeInput(inputId = "feature_selection",
                                label = "Select Features(s)",
                                choices = features,
+                               selected = input$feature_selection,
                                multiple = T)
             )
         } else if (input$tabs == "samples") {
@@ -330,10 +331,11 @@ server <- function(input, output) {
         if (length(input$sample_selection) > 0) {
             df_subset <- cancer_preds() %>%
                 dplyr::filter(type == input$set_selection) %>%
-                dplyr::filter(sample_id %in% input$sample_selection)
+                dplyr::filter(sample_id %in% input$sample_selection) %>%
+                mutate(sample_label = paste(sample_id, actual_value, sep = " - Subtype: "))
             g <- ggplot(df_subset, aes(x = model_id)) +
                 geom_bar(aes(fill = predicted_value), position = "fill") +
-                scale_fill_manual(values=c(cancer_subtype_colors(), "grey")) +
+                scale_fill_manual(values = c(cancer_subtype_colors(), "grey")) +
                 labs(y = "", x = "", fill = "") +
                 scale_y_continuous(expand = expand_scale(add = c(0.01, 0.05))) +
                 coord_flip() +
@@ -341,7 +343,7 @@ server <- function(input, output) {
                 theme(axis.ticks.y = element_blank(),
                       axis.text.y = element_text(size = 7),
                       panel.grid.major = element_blank()) +
-                facet_wrap(~sample_id, ncol = 2)
+                facet_wrap(~sample_label, ncol = 2)
             ggplotly(
                 g,
                 height = 10*length(unique(df_subset$model_id))*ceiling(length(input$sample_selection)/2)
@@ -359,6 +361,7 @@ server <- function(input, output) {
     ## Feature Distributions Tab
     ##---------------------------
     feature_subset <- reactiveVal(tibble())
+    cancer_feature_subset <-  reactiveVal(tibble())
 
     observeEvent(length(input$feature_selection), {
         if (length(input$feature_selection) > 0) {
@@ -370,8 +373,24 @@ server <- function(input, output) {
         }
     })
 
+    # TODO change cancer filter to allow for multiple selections
+    observeEvent(c(dim(feature_subset())[1], input$cancer_selection), {
+        if (dim(feature_subset())[1] > 0) {
+            vals <- inner_join(
+                predictions() %>%
+                    dplyr::filter(cancer_id == input$cancer_selection) %>%
+                    dplyr::select(sample_id, subtype_id = actual_value) %>%
+                    distinct(),
+                feature_subset()
+            )
+            cancer_feature_subset(vals)
+        } else {
+            cancer_feature_subset(tibble())
+        }
+    })
+
     output$featureDetails <- renderPlotly({
-        sub <- feature_subset()
+        sub <- cancer_feature_subset()
         if (dim(sub)[1] > 0) {
             nfeatures <- length(unique(sub$feature_id))
             g <- ggplot(sub,

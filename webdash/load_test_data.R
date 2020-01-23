@@ -33,5 +33,5 @@ acc_feature_vals <- data.table::fread("/Users/strucka/Projects/gdan-tmp-webdash/
   tidyr::gather(-ACC, -Labels, key = "feature_id", value = "value") %>%
   rename(sample_id = ACC) %>%
   mutate(subtype_id = as.factor(paste("ACC", Labels, sep=":"))) %>%
-  select(-Labels)
+  select(-Labels, -subtype_id)
 
