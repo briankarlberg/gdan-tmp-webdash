@@ -2,64 +2,32 @@ library(shiny)
 library(shinydashboard)
 library(shinycssloaders)
 library(iheatmapr)
+library(plotly)
 
 library(dplyr)
 library(gripql)
 
 source("helpers.R")
 
-# cancers <-  getCancers()
-cancers <- c("ACC")
-preds_df <- readr::read_csv("/Users/strucka/Projects/gdan-tmp/webdash/acc_predictions.csv") %>%
-    dplyr::mutate(
-        model_id = stringr::str_replace(model_id,
-                                        sprintf("Model:%s:", "ACC"),
-                                        ""),
-        predicted_value = as.factor(
-            stringr::str_replace(predicted_value,
-                                 "Subtype:",
-                                 "")
-        ),
-        actual_value = as.factor(
-            stringr::str_replace(actual_value,
-                                 "Subtype:",
-                                 "")
-        )
-    )
-
-features <- readr::read_delim("/Users/strucka/Projects/gdan-tmp/fbed-tests/ACC.tsv",
-                              delim = "\t",
-                              col_names = c("model_id", "feature")) %>%
-    mutate(feature = purrr::map(feature, jsonlite::fromJSON)) %>%
-    tidyr::unnest(feature)
-
-feature_vals <- data.table::fread("/Users/strucka/Projects/gdan-tmp/data/v7-matrices/ACC_v7_20191227.tsv") %>%
-    as_tibble() %>%
-    tidyr::gather(-ACC, -Labels, key="feature", value="value")
-
 ui <- dashboardPage(
     skin = "black",
     dashboardHeader(title = "GDAN TMP"),
     dashboardSidebar(
         sidebarMenu(
-            menuItem("Predictions", tabName = "predictions"),
-            menuItem("Features", tabName = "features"),
-            menuItem("Models", tabName = "models")
+            id = "tabs",
+            menuItem("Panel Builder", tabName = "models"),
+            menuItem("Model Predictions", tabName = "predictions"),
+            menuItem("Sample Predictions", tabName = "samples"),
+            menuItem("Feature Distributions", tabName = "features")
         ),
         br(),
-        selectInput(inputId = "cancer_selection", label = "Cancer Type", choices = cancers)
+        uiOutput("filters")
     ),
     dashboardBody(
         tabItems(
             tabItem(
                 tabName = "predictions",
                 h1("Compare Models"),
-                fluidRow(
-                    box(
-                        width = 12,
-                        selectInput(inputId = "set_selection", label = "Data Subset", choices = c("testing", "training"), selected = "testing")
-                    )
-                ),
                 fluidRow(
                     box(
                         width = 12,
@@ -77,22 +45,6 @@ ui <- dashboardPage(
                         )
                     )
                 ),
-                h1("Subtype Prediction Stability Across Repeat Folds"),
-                fluidRow(
-                    box(
-                        width = 12,
-                        uiOutput("sampleSelection")
-                    )
-                ),
-                fluidRow(
-                    box(
-                        width = 12,
-                        withSpinner(plotlyOutput("samplePredDetails", height = "100%",  width = "98%"))
-                    )
-                )
-            ),
-            tabItem(
-                tabName = "features",
                 h1("Feature Frequency in Models"),
                 fluidRow(
                     box(
@@ -105,13 +57,20 @@ ui <- dashboardPage(
                         withSpinner(plotlyOutput("featureFreq", height = "100%", width = "98%"))
                     ),
                 ),
-                h1("Feature Value Distributions"),
+            ),
+            tabItem(
+                tabName = "samples",
+                h1("Subtype Prediction Stability Across Repeat Folds"),
                 fluidRow(
                     box(
                         width = 12,
-                        uiOutput("featureSelection")
-                    ),
-                ),
+                        withSpinner(plotlyOutput("samplePredDetails", height = "100%",  width = "98%"))
+                    )
+                )
+            ),
+            tabItem(
+                tabName = "features",
+                h1("Feature Value Distributions"),
                 fluidRow(
                     box(
                         width = 12,
@@ -121,26 +80,26 @@ ui <- dashboardPage(
             ),
             tabItem(
                 tabName = "models",
-                h1("Models"),
+                # h1("Models"),
                 fluidRow(
-                    box(
-                        width = 12,
-                        withSpinner(DT::DTOutput("modelTable"))
-                    ),
                     box(
                         width = 4,
                         title = "Selected Models",
-                        textOutput("selectedModels")
+                        uiOutput("selectedModelsBox")
                     ),
                     box(
                         width = 4,
                         title = "Total Features",
-                        textOutput("totalFeatures")
+                        textOutput("totalFeaturesBox")
                     ),
                     box(
                         width = 4,
-                        title = "Avg Accuracy",
-                        textOutput("avgAccuracy")
+                        title = "Mean Classification Error",
+                        textOutput("classificationErrorBox")
+                    ),
+                    box(
+                        width = 12,
+                        withSpinner(DT::DTOutput("modelTable"))
                     )
                 )
             )
@@ -148,59 +107,131 @@ ui <- dashboardPage(
     )
 )
 
-
+# TODO: use the future and promises packages
 server <- function(input, output) {
+    ##--------------------
+    ## Global Data
+    ##--------------------
+    source("load_test_data.R")
+
+    featureSets <- reactive({
+        # getFeatureSets()
+        acc_feature_set
+    })
+
+    predictions <- reactive({
+        # getPredictions(NULL)
+        acc_preds
+    })
+
+    # cancers <- getCancers()
+    # features <- getFeatures()
+
+    ##--------------------
+    ## Sidebar filters
+    ##--------------------
+    output$filters <- renderUI({
+        if (input$tabs == "predictions") {
+            div(
+                selectInput(inputId = "cancer_selection",
+                            label = "Cancer Type",
+                            choices = cancers,
+                            selected = input$cancer_selection),
+                selectInput(inputId = "set_selection",
+                            label = "Data Subset",
+                            choices = c("testing", "training"),
+                            selected = input$set_selection)
+            )
+        } else if (input$tabs == "features") {
+            div(
+                selectInput(inputId = "cancer_selection",
+                            label = "Cancer Type",
+                            choices = cancers,
+                            selected = input$cancer_selection),
+                selectizeInput(inputId = "feature_selection",
+                               label = "Select Features(s)",
+                               choices = features,
+                               multiple = T)
+            )
+        } else if (input$tabs == "samples") {
+            div(
+                selectInput(inputId = "cancer_selection",
+                            label = "Cancer Type",
+                            choices = cancers,
+                            selected = input$cancer_selection),
+                selectInput(inputId = "set_selection",
+                            label = "Data Subset",
+                            choices = c("testing", "training"),
+                            selected = input$set_selection),
+                selectizeInput(inputId = "sample_selection",
+                               label = "Select Sample(s)",
+                               choices = unique(cancer_preds()$sample_id),
+                               multiple = T,
+                               selected = input$sample_selection)
+            )
+        } else {
+            div()
+        }
+    })
+
     ##--------------------
     ## Models Tab
     ##--------------------
-    output$modelTable <- DT::renderDT({
-        preds_df %>%
-            dplyr::group_by(model_id, type) %>%
+    model_summary <- reactive({
+        predictions() %>%
+            dplyr::group_by(cancer_id, model_id, type) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
                              total = n()) %>%
             ungroup() %>%
             dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
-            dplyr::select(model_id, type, tpr) %>%
+            dplyr::select(model_id, cancer_id, type, tpr) %>%
             tidyr::spread(type, tpr) %>%
-            rename(Model = model_id, TPR_Training = training, TPR_testing = testing) %>%
+            rename(Model = model_id, Project = cancer_id, TPR_Training = training, TPR_testing = testing) %>%
             mutate(nfeatures = NA, GEXP = NA, METH = NA, MUTA = NA, CNV = NA)
+    })
+
+    output$modelTable <- DT::renderDT({
+        model_summary()
     },
+    filter = 'top',
     rownames = FALSE,
     options = list(
         scrollX = TRUE,
-        order = list(1, "desc")
-    )
-    )
+        order = list(2, "desc")
+    ))
 
-    output$selectedModels <- renderText({
+    output$selectedModelsBox <- renderUI({
         if (length(input$modelTable_rows_selected) > 0) {
-            preds_df %>%
-                dplyr::group_by(model_id, type) %>%
-                dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                                 total = n()) %>%
-                ungroup() %>%
-                dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
-                dplyr::select(model_id, type, tpr) %>%
-                tidyr::spread(type, tpr) %>%
+            HTML(model_summary() %>%
                 dplyr::slice(input$modelTable_rows_selected) %>%
-                dplyr::pull(model_id)
+                dplyr::pull(Model) %>%
+                paste(sep="<br/>"))
         }
-    }, sep = ", ")
+    })
 
     ##--------------------
     ## Features Tab
     ##--------------------
-    # features <- getFeatures(input$cancer_selection)
-    # feature_vals <- getFeaturesValues(input$cancer_selection, input$feature_selection)
+    feature_subset <- reactiveVal(tibble())
+
+    observeEvent(length(input$feature_selection), {
+        if (length(input$feature_selection) > 0) {
+            # vals <- getFeaturesValues(input$feature_selection)
+            vals <- acc_feature_vals %>% dplyr::filter(feature_id %in% input$feature_selection)
+            feature_subset(vals)
+        } else {
+            feature_subset(tibble())
+        }
+    })
 
     output$featureFreq <- renderPlotly({
-        g <- features %>%
-            group_by(feature) %>%
+        g <- featureSets() %>%
+            group_by(feature_id) %>%
             summarize(count = n()) %>%
             filter(count >= input$nmodels) %>%
             ungroup() %>%
-            mutate(feature = reorder(feature, -count)) %>%
-            ggplot(aes(feature, count)) +
+            mutate(feature = reorder(feature_id, -count)) %>%
+            ggplot(aes(feature_id, count)) +
             geom_bar(stat = "identity") +
             scale_y_continuous(breaks = scales::pretty_breaks()) +
             labs(y = "# of Models", x = "") +
@@ -209,33 +240,25 @@ server <- function(input, output) {
         ggplotly(g, height = 400)
     })
 
-    output$featureSelection <- renderUI({
-        selectizeInput(inputId = "feature_selection",
-                       label = "Select Feature(s)",
-                       choices = unique(features$feature),
-                       multiple = T)
-    })
-
     output$featureDetails <- renderPlotly({
-        if (length(input$feature_selection) > 0) {
-            feature_subset <- feature_vals %>%
-                dplyr::filter(feature %in% input$feature_selection) %>%
-                mutate(subtype = as.factor(Labels))
-            g <- ggplot(feature_subset,
-                        aes(x = subtype,
+        sub <- feature_subset()
+        if (dim(sub)[1] > 0) {
+            nfeatures <- length(unique(sub$feature_id))
+            g <- ggplot(sub,
+                        aes(x = subtype_id,
                             y = value,
-                            fill = subtype)) +
+                            fill = subtype_id)) +
                 geom_violin(colour = NA, na.rm = T, alpha = 0.5) +
                 geom_jitter(width = 0.05, height = 0.05) +
                 coord_flip() +
                 labs(y = "", x = "", fill = "") +
                 theme_minimal() +
                 theme(axis.text.y = element_blank()) +
-                facet_wrap(~feature, ncol = 2, scales = "free_x")
+                facet_wrap(~feature_id, ncol = 2, scales = "free_x")
             ggplotly(
                 g,
                 tooltip = c("x", "y"),
-                height = 300*ceiling(length(input$feature_selection)/2)
+                height = 300*ceiling(nfeatures/2)
             )
         } else {
             g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Features"),
@@ -249,28 +272,31 @@ server <- function(input, output) {
     ##--------------------
     ## Model Tab
     ##--------------------
+    cancer_preds <- reactiveVal(tibble())
+    cancer_subtype_colors <- reactiveVal(c())
 
-    # preds_df <- getPredictions(input$cancer_selection)
-    nsubtypes <- length(levels(preds_df$actual_value))
-    colors <- viridis::viridis(nsubtypes)
-    col_map <- as.list(colors)
-    names(col_map) <- levels(preds_df$actual_value)
-
-    output$sampleSelection <- renderUI({
-        selectizeInput(inputId = "sample_selection",
-                       label = "Select Sample(s)",
-                       choices = unique(preds_df$sample_id),
-                       multiple = T)
+    observeEvent(input$cancer_selection, {
+        res <- predictions() %>%
+            dplyr::filter(cancer_id == input$cancer_selection)
+        if (dim(res)[1] > 0) {
+            nsubtypes <- length(levels(res$actual_value))
+            cols <- viridis::viridis(nsubtypes)
+            names(cols) <- levels(res$actual_value)
+            cancer_subtype_colors(cols)
+        } else {
+            cancer_subtype_colors(c())
+        }
+        cancer_preds(res)
     })
 
     output$samplePredDetails <- renderPlotly({
         if (length(input$sample_selection) > 0) {
-            df_subset <- preds_df %>%
+            df_subset <- cancer_preds() %>%
                 dplyr::filter(type == input$set_selection) %>%
                 dplyr::filter(sample_id %in% input$sample_selection)
             g <- ggplot(df_subset, aes(x = model_id)) +
                 geom_bar(aes(fill = predicted_value), position = "fill") +
-                scale_fill_manual(values=c(as.character(col_map), "grey")) +
+                scale_fill_manual(values=c(cancer_subtype_colors(), "grey")) +
                 labs(y = "", x = "", fill = "") +
                 scale_y_continuous(expand = expand_scale(add = c(0.01, 0.05))) +
                 coord_flip() +
@@ -293,7 +319,7 @@ server <- function(input, output) {
     })
 
     output$predHeatmap <- renderIheatmap({
-        avg_pred <- preds_df %>%
+        avg_pred <- cancer_preds() %>%
             dplyr::filter(type == input$set_selection) %>%
             dplyr::group_by(model_id, sample_id) %>%
             dplyr::count(predicted_value) %>%
@@ -312,13 +338,13 @@ server <- function(input, output) {
         pred_mat <- avg_pred_wide %>% dplyr::select(-model_id) %>% as.matrix()
         row.names(pred_mat) <- avg_pred_wide$model_id
 
-        subtypes <-  preds_df %>%
+        subtypes <-  cancer_preds() %>%
             dplyr::select(sample_id, actual_value) %>%
             dplyr::distinct() %>%
             dplyr::arrange(base::match(sample_id, colnames(pred_mat))) %>%
             dplyr::pull(actual_value)
 
-        tpr_model <- preds_df %>%
+        tpr_model <- cancer_preds() %>%
             dplyr::filter(type == input$set_selection) %>%
             dplyr::group_by(model_id) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
@@ -327,7 +353,7 @@ server <- function(input, output) {
             dplyr::arrange(base::match(model_id, rownames(pred_mat))) %>%
             dplyr::pull(tpr)
 
-        tpr_sample <- preds_df %>%
+        tpr_sample <- cancer_preds() %>%
             dplyr::filter(type == input$set_selection) %>%
             dplyr::group_by(sample_id) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
@@ -340,7 +366,7 @@ server <- function(input, output) {
         rowClust <- order.dendrogram(as.dendrogram(hclustfunc(pred_mat)))
 
         hm <- main_heatmap(pred_mat,
-                           colors = colors,
+                           colors = cancer_subtype_colors(),
                            show_colorbar = FALSE,
                            col_order = colClust,
                            row_order = rowClust) %>%
@@ -348,7 +374,7 @@ server <- function(input, output) {
                            name = "Subtypes",
                            title = "Actual Subtype",
                            side = "top",
-                           colors = colors) %>%
+                           colors = cancer_subtype_colors()) %>%
             add_col_plot(y =  tpr_sample, layout = list(title = "TPR")) %>%
             add_row_plot(x =  tpr_model, layout = list(title = "TPR"))
 
