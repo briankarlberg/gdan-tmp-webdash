@@ -174,8 +174,28 @@ server <- function(input, output) {
         }
     })
 
+    ##----------------------
+    ## Shared Reactive Vals
+    ##----------------------
+    cancer_preds <- reactiveVal(tibble())
+    cancer_subtype_colors <- reactiveVal(c())
+
+    observeEvent(input$cancer_selection, {
+        res <- predictions() %>%
+            dplyr::filter(cancer_id == input$cancer_selection)
+        if (dim(res)[1] > 0) {
+            nsubtypes <- length(levels(res$actual_value))
+            cols <- viridis::viridis(nsubtypes)
+            names(cols) <- levels(res$actual_value)
+            cancer_subtype_colors(cols)
+        } else {
+            cancer_subtype_colors(c())
+        }
+        cancer_preds(res)
+    })
+
     ##--------------------
-    ## Models Tab
+    ## Panel Builder Tab
     ##--------------------
     model_summary <- reactive({
         predictions() %>%
@@ -209,114 +229,9 @@ server <- function(input, output) {
         }
     })
 
-    ##--------------------
-    ## Features Tab
-    ##--------------------
-    feature_subset <- reactiveVal(tibble())
-
-    observeEvent(length(input$feature_selection), {
-        if (length(input$feature_selection) > 0) {
-            # vals <- getFeaturesValues(input$feature_selection)
-            vals <- acc_feature_vals %>% dplyr::filter(feature_id %in% input$feature_selection)
-            feature_subset(vals)
-        } else {
-            feature_subset(tibble())
-        }
-    })
-
-    output$featureFreq <- renderPlotly({
-        g <- featureSets() %>%
-            group_by(feature_id) %>%
-            summarize(count = n()) %>%
-            filter(count >= input$nmodels) %>%
-            ungroup() %>%
-            mutate(feature = reorder(feature_id, -count)) %>%
-            ggplot(aes(feature_id, count)) +
-            geom_bar(stat = "identity") +
-            scale_y_continuous(breaks = scales::pretty_breaks()) +
-            labs(y = "# of Models", x = "") +
-            theme_minimal(15) +
-            theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45))
-        ggplotly(g, height = 400)
-    })
-
-    output$featureDetails <- renderPlotly({
-        sub <- feature_subset()
-        if (dim(sub)[1] > 0) {
-            nfeatures <- length(unique(sub$feature_id))
-            g <- ggplot(sub,
-                        aes(x = subtype_id,
-                            y = value,
-                            fill = subtype_id)) +
-                geom_violin(colour = NA, na.rm = T, alpha = 0.5) +
-                geom_jitter(width = 0.05, height = 0.05) +
-                coord_flip() +
-                labs(y = "", x = "", fill = "") +
-                theme_minimal() +
-                theme(axis.text.y = element_blank()) +
-                facet_wrap(~feature_id, ncol = 2, scales = "free_x")
-            ggplotly(
-                g,
-                tooltip = c("x", "y"),
-                height = 300*ceiling(nfeatures/2)
-            )
-        } else {
-            g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Features"),
-                        aes(x, y)) +
-                geom_text(aes(label = z), size = 10) +
-                theme_void()
-            ggplotly(g, height = 400)
-        }
-    })
-
-    ##--------------------
-    ## Model Tab
-    ##--------------------
-    cancer_preds <- reactiveVal(tibble())
-    cancer_subtype_colors <- reactiveVal(c())
-
-    observeEvent(input$cancer_selection, {
-        res <- predictions() %>%
-            dplyr::filter(cancer_id == input$cancer_selection)
-        if (dim(res)[1] > 0) {
-            nsubtypes <- length(levels(res$actual_value))
-            cols <- viridis::viridis(nsubtypes)
-            names(cols) <- levels(res$actual_value)
-            cancer_subtype_colors(cols)
-        } else {
-            cancer_subtype_colors(c())
-        }
-        cancer_preds(res)
-    })
-
-    output$samplePredDetails <- renderPlotly({
-        if (length(input$sample_selection) > 0) {
-            df_subset <- cancer_preds() %>%
-                dplyr::filter(type == input$set_selection) %>%
-                dplyr::filter(sample_id %in% input$sample_selection)
-            g <- ggplot(df_subset, aes(x = model_id)) +
-                geom_bar(aes(fill = predicted_value), position = "fill") +
-                scale_fill_manual(values=c(cancer_subtype_colors(), "grey")) +
-                labs(y = "", x = "", fill = "") +
-                scale_y_continuous(expand = expand_scale(add = c(0.01, 0.05))) +
-                coord_flip() +
-                theme_minimal() +
-                theme(axis.ticks.y = element_blank(),
-                      axis.text.y = element_text(size = 7),
-                      panel.grid.major = element_blank()) +
-                facet_wrap(~sample_id, ncol = 2)
-            ggplotly(
-                g,
-                height = 10*length(unique(df_subset$model_id))*ceiling(length(input$sample_selection)/2)
-            )
-        } else {
-            g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Samples"),
-                        aes(x, y)) +
-                geom_text(aes(label = z), size = 10) +
-                theme_void()
-            ggplotly(g, height = 400)
-        }
-    })
+    ##----------------------
+    ## Model Predictions Tab
+    ##----------------------
 
     output$predHeatmap <- renderIheatmap({
         avg_pred <- cancer_preds() %>%
@@ -391,6 +306,99 @@ server <- function(input, output) {
         }
         hm %>% modify_layout(list(height = 15*dim(pred_mat)[1]))
     })
+
+    output$featureFreq <- renderPlotly({
+        g <- featureSets() %>%
+            group_by(feature_id) %>%
+            summarize(count = n()) %>%
+            filter(count >= input$nmodels) %>%
+            ungroup() %>%
+            mutate(feature = reorder(feature_id, -count)) %>%
+            ggplot(aes(feature_id, count)) +
+            geom_bar(stat = "identity") +
+            scale_y_continuous(breaks = scales::pretty_breaks()) +
+            labs(y = "# of Models", x = "") +
+            theme_minimal(15) +
+            theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45))
+        ggplotly(g, height = 400)
+    })
+
+    ##------------------------
+    ## Sample Predictions Tab
+    ##------------------------
+    output$samplePredDetails <- renderPlotly({
+        if (length(input$sample_selection) > 0) {
+            df_subset <- cancer_preds() %>%
+                dplyr::filter(type == input$set_selection) %>%
+                dplyr::filter(sample_id %in% input$sample_selection)
+            g <- ggplot(df_subset, aes(x = model_id)) +
+                geom_bar(aes(fill = predicted_value), position = "fill") +
+                scale_fill_manual(values=c(cancer_subtype_colors(), "grey")) +
+                labs(y = "", x = "", fill = "") +
+                scale_y_continuous(expand = expand_scale(add = c(0.01, 0.05))) +
+                coord_flip() +
+                theme_minimal() +
+                theme(axis.ticks.y = element_blank(),
+                      axis.text.y = element_text(size = 7),
+                      panel.grid.major = element_blank()) +
+                facet_wrap(~sample_id, ncol = 2)
+            ggplotly(
+                g,
+                height = 10*length(unique(df_subset$model_id))*ceiling(length(input$sample_selection)/2)
+            )
+        } else {
+            g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Samples"),
+                        aes(x, y)) +
+                geom_text(aes(label = z), size = 10) +
+                theme_void()
+            ggplotly(g, height = 400)
+        }
+    })
+
+    ##---------------------------
+    ## Feature Distributions Tab
+    ##---------------------------
+    feature_subset <- reactiveVal(tibble())
+
+    observeEvent(length(input$feature_selection), {
+        if (length(input$feature_selection) > 0) {
+            # vals <- getFeaturesValues(input$feature_selection)
+            vals <- acc_feature_vals %>% dplyr::filter(feature_id %in% input$feature_selection)
+            feature_subset(vals)
+        } else {
+            feature_subset(tibble())
+        }
+    })
+
+    output$featureDetails <- renderPlotly({
+        sub <- feature_subset()
+        if (dim(sub)[1] > 0) {
+            nfeatures <- length(unique(sub$feature_id))
+            g <- ggplot(sub,
+                        aes(x = subtype_id,
+                            y = value,
+                            fill = subtype_id)) +
+                geom_violin(colour = NA, na.rm = T, alpha = 0.5) +
+                geom_jitter(width = 0.05, height = 0.05) +
+                coord_flip() +
+                labs(y = "", x = "", fill = "") +
+                theme_minimal() +
+                theme(axis.text.y = element_blank()) +
+                facet_wrap(~feature_id, ncol = 2, scales = "free_x")
+            ggplotly(
+                g,
+                tooltip = c("x", "y"),
+                height = 300*ceiling(nfeatures/2)
+            )
+        } else {
+            g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Features"),
+                        aes(x, y)) +
+                geom_text(aes(label = z), size = 10) +
+                theme_void()
+            ggplotly(g, height = 400)
+        }
+    })
+
 }
 
 shinyApp(ui = ui, server = server)
