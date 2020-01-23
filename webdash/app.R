@@ -83,6 +83,10 @@ ui <- dashboardPage(
                 # h1("Models"),
                 fluidRow(
                     box(
+                        width = 12,
+                        withSpinner(DT::DTOutput("modelTable"))
+                    ),
+                    box(
                         width = 4,
                         title = "Selected Models",
                         uiOutput("selectedModelsBox")
@@ -96,10 +100,6 @@ ui <- dashboardPage(
                         width = 4,
                         title = "Mean Classification Error",
                         textOutput("classificationErrorBox")
-                    ),
-                    box(
-                        width = 12,
-                        withSpinner(DT::DTOutput("modelTable"))
                     )
                 )
             )
@@ -108,6 +108,8 @@ ui <- dashboardPage(
 )
 
 # TODO: use the future and promises packages
+# https://blog.rstudio.com/2018/06/26/shiny-1-1-0/
+#
 server <- function(input, output) {
     ##--------------------
     ## Global Data
@@ -198,6 +200,7 @@ server <- function(input, output) {
     ##--------------------
     ## Panel Builder Tab
     ##--------------------
+
     model_summary <- reactive({
         predictions() %>%
             dplyr::group_by(cancer_id, model_id, type) %>%
@@ -207,26 +210,34 @@ server <- function(input, output) {
             dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
             dplyr::select(model_id, cancer_id, type, tpr) %>%
             tidyr::spread(type, tpr) %>%
-            rename(Model = model_id, Project = cancer_id, TPR_Training = training, TPR_testing = testing) %>%
-            mutate(nfeatures = NA, GEXP = NA, METH = NA, MUTA = NA, CNV = NA)
+            dplyr::rename(Model = model_id, Project = cancer_id, TPR_Training = training, TPR_Testing = testing) %>%
+            dplyr::mutate(nfeatures = NA, GEXP = NA, METH = NA, MUTA = NA, CNV = NA) %>%
+            dplyr::arrange(desc(TPR_testing))
     })
+
+    # selected_models <- reactive({
+    #     model_summary() %>%
+    #         group_by(project) %>%
+    #         filter(TPR_testing == max(TPR_testing)) %>%
+    # })
 
     output$modelTable <- DT::renderDT({
         model_summary()
     },
-    filter = 'top',
+    filter = "top",
     rownames = FALSE,
+    selection = list(selected = c(1, 3), target = "row"),
     options = list(
-        scrollX = TRUE,
-        order = list(2, "desc")
+        scrollX = TRUE
     ))
 
     output$selectedModelsBox <- renderUI({
         if (length(input$modelTable_rows_selected) > 0) {
-            HTML(model_summary() %>%
+            selected_models <- model_summary() %>%
                 dplyr::slice(input$modelTable_rows_selected) %>%
                 dplyr::pull(Model) %>%
-                paste(sep="<br/>"))
+                paste(collapse = "<br/>")
+            shiny::HTML(selected_models)
         }
     })
 
@@ -327,6 +338,9 @@ server <- function(input, output) {
     ##------------------------
     ## Sample Predictions Tab
     ##------------------------
+
+    ## See https://stackoverflow.com/questions/16389636/in-ggplot2-how-can-i-add-additional-legend
+
     output$samplePredDetails <- renderPlotly({
         if (length(input$sample_selection) > 0) {
             df_subset <- cancer_preds() %>%
