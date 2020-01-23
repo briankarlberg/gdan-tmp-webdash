@@ -19,49 +19,34 @@ def transform_one(input_matrix,
     emitted_models = {}
     i = 0
     with open(input_matrix, "r") as fh:
-        for line in csv.DictReader(filter(lambda row: row[0]!='#', fh), delimiter="\t"):
-            cancer_id = None
-            sample_id = None
-            if list(line.keys())[0] != "Sample_ID":
-                cancer_id = list(line.keys())[0]
-                sample_id = line[cancer_id]
-            else:
-                sample_id = line["Sample_ID"]
-                cancer_id = line["Label"].split(":")[0]
-            sample_id = line[cancer_id]
+        for line in csv.DictReader(filter(lambda row: row[0] != '#', fh), delimiter="\t"):
+            sample_id = line["Sample_ID"]
+            cancer_id = line["Label"].split(":")[0]
+            assert cancer_id.isupper()  # check it looks like a TCGA project code
+
             repeat = line["Repeat"][1:] if line["Repeat"].startswith("R") else line["Repeat"]
             fold = line["Fold"][1:] if line["Fold"].startswith("F") else line["Fold"]
             split_id = "%s:R%s:F%s" % (cancer_id, repeat, fold)
 
             if i == 0:
                 for model_id in list(line.keys())[5:]:
+                    parts = model_id.split("|")
+                    if len(parts) != 4:
+                        ValueError("key format incorrect, expected 'unique_classifier_name|feature_set_id|date_stamp|c/p'")
+
                     model = Model(
-                        gid=Model.make_gid("%s:%s" % (cancer_id, model_id)),
+                        gid=Model.make_gid("%s:%s" % (cancer_id, parts[0])),
                     )
-                    emitter.emit_vertex(model)
-                i = 1
+                    if model.gid() not in emitted_models:
+                        emitter.emit_vertex(model)
+                        emitter.emit_edge(
+                            Model_Cancer(
+                                _from=model.gid(),
+                                _to=Cancer.make_gid(cancer_id)
+                            ),
+                            emit_backref=True
+                        )
 
-            for model_id, pred_val in line.items():
-                if model_id in [cancer_id, "Repeat", "Fold", "Label", "Test"]:
-                    continue
-
-                parts = model_id.split("|")
-                model_id = parts[0]
-
-                model = Model(
-                    gid=Model.make_gid("%s:%s" % (cancer_id, model_id)),
-                )
-                if model.gid() not in emitted_models:
-                    emitter.emit_vertex(model)
-                    emitter.emit_edge(
-                        Model_Cancer(
-                            _from=model.gid(),
-                            _to=Cancer.make_gid(cancer_id)
-                        ),
-                        emit_backref=True
-                    )
-
-                    if len(parts) == 4:
                         feature_set_id = parts[1]
                         emitter.emit_edge(
                             Model_FeatureSet(
@@ -70,10 +55,21 @@ def transform_one(input_matrix,
                             ),
                             emit_backref=True
                         )
+                    emitted_models[model.gid()] = True
+                i = 1
+
+            for key, pred_val in line.items():
+                if key in list(line.keys())[:6]:
+                    continue
+
+                parts = key.split("|")
+                model = Model(
+                    gid=Model.make_gid("%s:%s" % (cancer_id, parts[0])),
+                )
 
                 metadata = None
                 prediction = None
-                if model_id.endswith("|p") or pred_val.startswith("{"):
+                if parts[-1] == "p" or pred_val.startswith("{"):
                     metadata = json.loads(pred_val)
                     max_prob = 0
                     for subtype, prob in metadata["classification"].items():
@@ -87,7 +83,7 @@ def transform_one(input_matrix,
                 label = line["Label"] if line["Label"].startswith(cancer_id) else "%s:%s" % (cancer_id, line["Label"])
 
                 prediction = Prediction(
-                    gid=Prediction.make_gid("%s:%s:%s:%s" % (cancer_id, "|".join(parts), split_id, sample_id)),
+                    gid=Prediction.make_gid("%s:%s:%s:%s:%s" % (cancer_id, parts[0], parts[1], split_id, sample_id)),
                     predicted_value=Subtype.make_gid(prediction),
                     actual_value=Subtype.make_gid(label),
                     metadata=metadata,
@@ -125,9 +121,6 @@ def transform_one(input_matrix,
                      ),
                     emit_backref=True
                 )
-
-                # TODO mode of predicitons for given sample / model?
-                # TODO: model -> feature edges
 
     emitter.close()
 

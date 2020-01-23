@@ -1,0 +1,84 @@
+library(foreach)
+library(magrittr)
+
+output_files <- list.files("/Users/strucka/Projects/gdan-tmp-webdash/data/struck-outputs", "randomforest", full.names = T)
+preds <- foreach(f = output_files[1:3], .combine = dplyr::bind_rows) %do% {
+  data.table::fread(f) %>%
+    dplyr::as_tibble() %>%
+    tidyr::gather(-Sample_ID, -Repeat, -Fold, -Test, -Label, key = "prediction_id", value = "predicted_value") %>%
+    dplyr::rename(sample_id = Sample_ID, `repeat` = Repeat, fold = Fold, actual_value = Label, type = Test) %>%
+    tidyr::separate(prediction_id, sep = "\\|", into = c("model_id", "featureset_id", "date", "ptype"), remove = F) %>%
+    tidyr::separate(actual_value, sep = ":", into = c("cancer_id", "extra"), remove = F) %>%
+    dplyr::select(-ptype, -extra) %>%
+    dplyr::mutate(type = ifelse(type == 1, "testing", "training"))
+} %>%
+  dplyr::mutate(predicted_value = as.factor(predicted_value),
+                actual_value = as.factor(actual_value),
+                date = as.Date(date)) %>%
+  tidyr::separate(model_id, "\\:", into = c("cancer_id", "model_id"))
+
+feature_sets_file <- "/Users/strucka/Projects/gdan-tmp-webdash/data/struck-outputs/featuresets_struck.tsv"
+feature_sets <- data.table::fread(feature_sets_file) %>%
+  dplyr::as_tibble() %>%
+  dplyr::mutate(Features = purrr::map(Features, jsonlite::fromJSON),
+         TCGA_Projects = purrr::map(TCGA_Projects, jsonlite::fromJSON)) %>%
+  tidyr::unnest(TCGA_Projects) %>%
+  tidyr::unnest(Features) %>%
+  dplyr::rename(featureset_id = Feature_Set_ID,
+                cancer_id = TCGA_Projects,
+                feature_id = Features)
+
+feature_files <- list.files("/Users/strucka/Projects/gdan-tmp-webdash/data/v7-matrices/", ".tsv", full.names = T)
+feature_vals <- foreach(f = feature_files[1], .combine = dplyr::bind_rows) %do% {
+  data.table::fread(f) %>%
+    dplyr::as_tibble() %>%
+    dplyr::rename(Sample_ID = 1) %>%
+    dplyr::select(-Labels) %>%
+    tidyr::gather(-Sample_ID, key = "feature_id", value = "value")
+} %>%
+  dplyr::rename(sample_id = Sample_ID)
+
+cancers <- preds %>% dplyr::pull(cancer_id) %>% unique()
+features <- feature_vals %>% dplyr::pull(feature_id) %>% unique()
+
+##------------------
+## ACC only
+##------------------
+# cancers <- c("ACC", "BRCA")
+#
+# acc_preds <- readr::read_csv("/Users/strucka/Projects/gdan-tmp-webdash/webdash/acc_predictions.csv") %>%
+#   dplyr::mutate(
+#     cancer_id = "ACC",
+#     featureset_id = NA,
+#     model_id = stringr::str_replace(model_id,
+#                                     sprintf("Model:%s:", "ACC"),
+#                                     ""),
+#     predicted_value = as.factor(
+#       stringr::str_replace(predicted_value,
+#                            "Subtype:",
+#                            "")
+#     ),
+#     actual_value = as.factor(
+#       stringr::str_replace(actual_value,
+#                            "Subtype:",
+#                            "")
+#     )
+#   )
+#
+# acc_feature_set <- readr::read_delim("/Users/strucka/Projects/gdan-tmp-webdash/fbed-tests/ACC.tsv",
+#                                      delim = "\t",
+#                                      col_names = c("featureset_id", "feature_id")) %>%
+#   mutate(feature_id = purrr::map(feature_id, jsonlite::fromJSON)) %>%
+#   tidyr::unnest(feature_id) %>%
+#   mutate(cancer_id = "ACC",
+#          model_id = NA)
+#
+# features <- unique(acc_feature_set$feature_id)
+#
+# acc_feature_vals <- data.table::fread("/Users/strucka/Projects/gdan-tmp-webdash/data/v7-matrices/ACC_v7_20191227.tsv") %>%
+#   as_tibble() %>%
+#   tidyr::gather(-ACC, -Labels, key = "feature_id", value = "value") %>%
+#   dplyr::rename(sample_id = ACC) %>%
+#   dplyr::mutate(subtype_id = as.factor(paste("ACC", Labels, sep=":"))) %>%
+#   dplyr::select(-Labels, -subtype_id)
+#
