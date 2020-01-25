@@ -203,22 +203,22 @@ server <- function(input, output) {
 
     model_summary <- reactive({
         predictions() %>%
-            dplyr::group_by(cancer_id, model_id, type) %>%
+            dplyr::group_by(cancer_id, model_id, featureset_id, type) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
                              total = n()) %>%
             ungroup() %>%
             dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
-            dplyr::select(model_id, cancer_id, type, tpr) %>%
+            dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
             tidyr::spread(type, tpr) %>%
-            dplyr::rename(Model = model_id, Project = cancer_id, TPR_Training = training, TPR_Testing = testing) %>%
-            dplyr::mutate(nfeatures = NA, GEXP = NA, METH = NA, MUTA = NA, CNV = NA) %>%
-            dplyr::arrange(desc(TPR_testing))
+            dplyr::rename(Project = cancer_id, Model = model_id, Features = featureset_id, TPR_Training = training, TPR_Testing = testing) %>%
+            dplyr::mutate(N_Features = NA, GEXP = NA, MIR = NA, METH = NA, MUTA = NA, CNVR = NA) %>%
+            dplyr::arrange(desc(TPR_Testing))
     })
 
     # selected_models <- reactive({
     #     model_summary() %>%
     #         group_by(project) %>%
-    #         filter(TPR_testing == max(TPR_testing)) %>%
+    #         filter(TPR_Testing == max(TPR_Testing)) %>%
     # })
 
     output$modelTable <- DT::renderDT({
