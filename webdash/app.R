@@ -118,13 +118,16 @@ server <- function(input, output) {
 
     featureSets <- reactive({
         # getFeatureSets(NULL)
-        acc_feature_set
+        # acc_feature_set'
+        feature_sets
     })
 
     predictions <- reactive({
         # getPredictions(NULL)
-        acc_preds
+        # acc_preds
+        preds
     })
+
 
     # cancers <- getCancers()
     # features <- getFeatures()
@@ -185,7 +188,8 @@ server <- function(input, output) {
 
     observeEvent(input$cancer_selection, {
         res <- predictions() %>%
-            dplyr::filter(cancer_id == input$cancer_selection)
+            dplyr::filter(cancer_id == input$cancer_selection) %>%
+            droplevels()
         if (dim(res)[1] > 0) {
             nsubtypes <- length(levels(res$actual_value))
             cols <- viridis::viridis(nsubtypes)
@@ -248,22 +252,20 @@ server <- function(input, output) {
     output$predHeatmap <- renderIheatmap({
         avg_pred <- cancer_preds() %>%
             dplyr::filter(type == input$set_selection) %>%
-            dplyr::group_by(model_id, sample_id) %>%
+            dplyr::group_by(prediction_id, sample_id) %>%
             dplyr::count(predicted_value) %>%
             dplyr::mutate(freq = n / sum(n)) %>%
-            dplyr::arrange(desc(n)) %>%
+            dplyr::arrange(desc(n), .by_group = TRUE) %>%
             dplyr::slice(1) %>%
             dplyr::ungroup() %>%
-            dplyr::mutate(
-                predicted_value = as.numeric(predicted_value)
-            )
+            dplyr::mutate(predicted_value = as.numeric(predicted_value))
 
         avg_pred_wide <- avg_pred %>%
             dplyr::select(-n, -freq) %>%
             tidyr::spread(sample_id, predicted_value)
 
-        pred_mat <- avg_pred_wide %>% dplyr::select(-model_id) %>% as.matrix()
-        row.names(pred_mat) <- avg_pred_wide$model_id
+        pred_mat <- avg_pred_wide %>% dplyr::select(-prediction_id) %>% as.matrix()
+        row.names(pred_mat) <- avg_pred_wide$prediction_id
 
         subtypes <-  cancer_preds() %>%
             dplyr::select(sample_id, actual_value) %>%
@@ -273,11 +275,11 @@ server <- function(input, output) {
 
         tpr_model <- cancer_preds() %>%
             dplyr::filter(type == input$set_selection) %>%
-            dplyr::group_by(model_id) %>%
+            dplyr::group_by(prediction_id) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
                              total = n()) %>%
             dplyr::mutate(tpr = correct / total) %>%
-            dplyr::arrange(base::match(model_id, rownames(pred_mat))) %>%
+            dplyr::arrange(base::match(prediction_id, rownames(pred_mat))) %>%
             dplyr::pull(tpr)
 
         tpr_sample <- cancer_preds() %>%
@@ -297,11 +299,11 @@ server <- function(input, output) {
                            show_colorbar = FALSE,
                            col_order = colClust,
                            row_order = rowClust) %>%
-            add_col_groups(subtypes,
+            add_col_groups(subtypes %>% as.character(),
                            name = "Subtypes",
                            title = "Actual Subtype",
                            side = "top",
-                           colors = cancer_subtype_colors()) %>%
+                           colors = cancer_subtype_colors() %>% as.character()) %>%
             add_col_plot(y =  tpr_sample, layout = list(title = "TPR")) %>%
             add_row_plot(x =  tpr_model, layout = list(title = "TPR"))
 
@@ -316,22 +318,32 @@ server <- function(input, output) {
         } else {
             hm <- hm %>% add_row_title("Models", font = list(size = 20))
         }
-        hm %>% modify_layout(list(height = 15*dim(pred_mat)[1]))
+        hm %>% modify_layout(list(height = 400 + 15*dim(pred_mat)[1]))
     })
 
     output$featureFreq <- renderPlotly({
-        g <- featureSets() %>%
-            group_by(feature_id) %>%
-            summarize(count = n()) %>%
-            filter(count >= input$nmodels) %>%
-            ungroup() %>%
-            mutate(feature = reorder(feature_id, -count)) %>%
+        fset <- featureSets() %>% dplyr::filter(cancer_id  == input$cancer_selection)
+        fset_sub <- dplyr::left_join(
+            fset,
+            fset %>% dplyr::count(feature_id, name = "count")
+        ) %>%
+            dplyr::select(feature_id, count, featureset_id) %>%
+            dplyr::distinct() %>%
+            dplyr::group_by(feature_id, count) %>%
+            dplyr::summarise(featuresets = toString(featureset_id)) %>%
+            dplyr::ungroup() %>%
+            dplyr::arrange(desc(count)) %>%
+            dplyr::mutate(feature_id = reorder(feature_id, -count))
+
+        g <- fset_sub %>%
+            dplyr::filter(count >= input$nmodels) %>%
             ggplot(aes(feature_id, count)) +
-            geom_bar(stat = "identity") +
+            geom_bar(aes(shape = featuresets), stat = "identity") +
             scale_y_continuous(breaks = scales::pretty_breaks()) +
             labs(y = "# of Models", x = "") +
             theme_minimal(15) +
-            theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45))
+            theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45),
+                  legend.position = "none")
         ggplotly(g, height = 400)
     })
 
@@ -347,7 +359,7 @@ server <- function(input, output) {
                 dplyr::filter(type == input$set_selection) %>%
                 dplyr::filter(sample_id %in% input$sample_selection) %>%
                 mutate(sample_label = paste(sample_id, actual_value, sep = " - Subtype: "))
-            g <- ggplot(df_subset, aes(x = model_id)) +
+            g <- ggplot(df_subset, aes(x = prediction_id)) +
                 geom_bar(aes(fill = predicted_value), position = "fill") +
                 scale_fill_manual(values = c(cancer_subtype_colors(), "grey")) +
                 labs(y = "", x = "", fill = "") +
@@ -360,7 +372,7 @@ server <- function(input, output) {
                 facet_wrap(~sample_label, ncol = 2)
             ggplotly(
                 g,
-                height = 10*length(unique(df_subset$model_id))*ceiling(length(input$sample_selection)/2)
+                height = 400 + 10*length(unique(df_subset$prediction_id))*ceiling(length(input$sample_selection)/2)
             )
         } else {
             g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Samples"),
@@ -380,7 +392,7 @@ server <- function(input, output) {
     observeEvent(length(input$feature_selection), {
         if (length(input$feature_selection) > 0) {
             # vals <- getFeaturesValues(input$feature_selection)
-            vals <- acc_feature_vals %>% dplyr::filter(feature_id %in% input$feature_selection)
+            vals <- feature_vals %>% dplyr::filter(feature_id %in% input$feature_selection)
             feature_subset(vals)
         } else {
             feature_subset(tibble())
