@@ -206,17 +206,30 @@ server <- function(input, output) {
     ##--------------------
 
     model_summary <- reactive({
-        predictions() %>%
-            dplyr::group_by(cancer_id, model_id, featureset_id, type) %>%
-            dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                             total = n()) %>%
-            ungroup() %>%
-            dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
-            dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
-            tidyr::spread(type, tpr) %>%
-            dplyr::rename(Project = cancer_id, Model = model_id, Features = featureset_id, TPR_Training = training, TPR_Testing = testing) %>%
-            dplyr::mutate(N_Features = NA, GEXP = NA, MIR = NA, METH = NA, MUTA = NA, CNVR = NA) %>%
-            dplyr::arrange(desc(TPR_Testing))
+        dplyr::left_join(
+            predictions() %>%
+                dplyr::group_by(cancer_id, model_id, featureset_id, type) %>%
+                dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
+                                 total = n()) %>%
+                dplyr::ungroup() %>%
+                dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
+                dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
+                tidyr::spread(type, tpr) %>%
+                dplyr::rename(Project = cancer_id, Model = model_id, Features = featureset_id,
+                              TPR_Training = training, TPR_Testing = testing) %>%
+                dplyr::arrange(desc(TPR_Testing)),
+
+            featureSets() %>%
+                # tidyr::separate(feature_id,
+                #                 sep = "\\:",
+                #                 into = c("datatype", "platform1", "platform2", "featureid1", "featureid2", "extra"),
+                #                 remove = F) %>%
+                # dplyr::mutate(platform = paste(platform1, platform2, sep="")) %>%
+                dplyr::group_by(featureset_id, cancer_id) %>%
+                dplyr::summarize(N_Features = n()) %>%
+                dplyr::ungroup() %>%
+                dplyr::rename(Features = featureset_id, Project = cancer_id)
+        )
     })
 
     # selected_models <- reactive({
@@ -330,7 +343,7 @@ server <- function(input, output) {
             dplyr::select(feature_id, count, featureset_id) %>%
             dplyr::distinct() %>%
             dplyr::group_by(feature_id, count) %>%
-            dplyr::summarise(featuresets = toString(featureset_id)) %>%
+            dplyr::summarise(feature_sets = toString(featureset_id)) %>%
             dplyr::ungroup() %>%
             dplyr::arrange(desc(count)) %>%
             dplyr::mutate(feature_id = reorder(feature_id, -count))
@@ -338,7 +351,7 @@ server <- function(input, output) {
         g <- fset_sub %>%
             dplyr::filter(count >= input$nmodels) %>%
             ggplot(aes(feature_id, count)) +
-            geom_bar(aes(shape = featuresets), stat = "identity") +
+            geom_bar(aes(size = feature_sets), stat = "identity") +
             scale_y_continuous(breaks = scales::pretty_breaks()) +
             labs(y = "# of Models", x = "") +
             theme_minimal(15) +
@@ -402,11 +415,11 @@ server <- function(input, output) {
     # TODO change cancer filter to allow for multiple selections
     observeEvent(c(dim(feature_subset())[1], input$cancer_selection), {
         if (dim(feature_subset())[1] > 0) {
-            vals <- inner_join(
+            vals <- dplyr::inner_join(
                 predictions() %>%
                     dplyr::filter(cancer_id == input$cancer_selection) %>%
                     dplyr::select(sample_id, subtype_id = actual_value) %>%
-                    distinct(),
+                    dplyr::distinct(),
                 feature_subset()
             )
             cancer_feature_subset(vals)

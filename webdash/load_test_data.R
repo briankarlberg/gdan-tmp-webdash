@@ -1,4 +1,5 @@
 library(foreach)
+library(magrittr)
 
 output_files <- list.files("/Users/strucka/Projects/gdan-tmp-webdash/data/struck-outputs", "randomforest", full.names = T)
 preds <- foreach(f = output_files, .combine = dplyr::bind_rows) %do% {
@@ -21,18 +22,19 @@ feature_sets <- data.table::fread(feature_sets_file) %>%
          TCGA_Projects = purrr::map(TCGA_Projects, jsonlite::fromJSON)) %>%
   tidyr::unnest(TCGA_Projects) %>%
   tidyr::unnest(Features) %>%
-  rename(featureset_id = Feature_Set_ID,
-         cancer_id = TCGA_Projects,
-         feature_id = Features)
+  dplyr::rename(featureset_id = Feature_Set_ID,
+                cancer_id = TCGA_Projects,
+                feature_id = Features)
 
 feature_files <- list.files("/Users/strucka/Projects/gdan-tmp-webdash/data/v7-matrices/", ".tsv", full.names = T)
-feature_vals <- foreach(f = feature_files[1:2], .combine = dplyr::bind_rows) %do% {
+feature_vals <- foreach(f = feature_files[1], .combine = dplyr::bind_rows) %do% {
   data.table::fread(f) %>%
     dplyr::as_tibble() %>%
     dplyr::rename(Sample_ID = 1) %>%
     dplyr::select(-Labels) %>%
     tidyr::gather(-Sample_ID, key = "feature_id", value = "value")
-}
+} %>%
+  dplyr::rename(sample_id = Sample_ID)
 
 cancers <- preds %>% dplyr::pull(cancer_id) %>% unique()
 features <- feature_vals %>% dplyr::pull(feature_id) %>% unique()
