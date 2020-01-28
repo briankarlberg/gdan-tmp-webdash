@@ -3,9 +3,7 @@ library(shinydashboard)
 library(shinycssloaders)
 library(iheatmapr)
 library(plotly)
-
 library(dplyr)
-library(gripql)
 
 source("helpers.R")
 
@@ -42,10 +40,6 @@ ui <- dashboardPage(
         ),
         conditionalPanel(
             "input.tabs == 'features'",
-            # selectizeInput(inputId = "feature_set_selection",
-            #                label = "Limit to Feature Set(s)",
-            #                choices = NULL,
-            #                multiple = T),
             selectizeInput(inputId = "feature_selection",
                            label = "Select Features(s)",
                            choices = NULL,
@@ -59,8 +53,8 @@ ui <- dashboardPage(
                 fluidRow(
                     box(
                         width = 12,
-                        div(style = 'height: 750px; overflow-y: auto',
-                        withSpinner(DT::DTOutput("modelTable"))
+                        div(style = 'max-height: 750px; overflow-y: auto',
+                            withSpinner(DT::DTOutput("modelTable"))
                         )
                     ),
                     tabBox(
@@ -71,41 +65,41 @@ ui <- dashboardPage(
                         tabPanel(
                             "Features",
                             div(style = 'height: 439px; overflow-y: auto',
-                                uiOutput("selectedFeaturesBox")
+                                withSpinner(uiOutput("selectedFeaturesBox"))
                             ),
                         ),
                         tabPanel(
                             "Models",
                             div(style = 'height: 439px; overflow-y: auto',
-                                uiOutput("selectedModelsBox")
+                                withSpinner(uiOutput("selectedModelsBox"))
                             ),
                         )
                     ),
                     box(
                         width = 4,
                         title = "Total Features",
-                        h3(textOutput("totalFeaturesBox"))
+                        h3(withSpinner(textOutput("totalFeaturesBox")))
                     ),
                     box(
                         width = 4,
                         title = "Mean TPR",
-                        h3(textOutput("classificationErrorBox"))
+                        h3(withSpinner(textOutput("classificationErrorBox")))
                     ),
                     box(
                         width = 4,
                         title = "Feature Types",
-                        plotlyOutput("featureTypeBox", height = 300, width = "98%")
+                        withSpinner(plotlyOutput("featureTypeBox", height = 300, width = "98%"))
                     ),
                     box(
                         width = 4,
                         title = "Feature Frequency",
-                        plotlyOutput("featureFreqBox", height = 300, width = "98%")
+                        withSpinner(plotlyOutput("featureFreqBox", height = 300, width = "98%"))
                     ),
                     box(
                         width = 12,
-                        title = "Panel Performance",
-                        div(style = 'height: 650px; overflow-y: auto',
-                            plotlyOutput("performanceBox", height = "100%", width = "98%")
+                        title = "Panel Performance - TPR x Cancer Subtype",
+                        div(style = 'max-height: 750px; overflow-y: auto',
+                            withSpinner(plotlyOutput("performanceBox", height = "100%", width = "98%"), proxy.height = "300px")
                         )
                     )
                 )
@@ -116,8 +110,8 @@ ui <- dashboardPage(
                 fluidRow(
                     box(
                         width = 12,
-                        withSpinner(iheatmaprOutput("predHeatmap", height = "100%", width = "98%")),
-                        tags$div(
+                        withSpinner(iheatmaprOutput("predHeatmap", height = "100%", width = "98%"), proxy.height = "400px"),
+                        div(
                             align = "center",
                             class = "multicol",
                             shinyWidgets::prettyCheckboxGroup("predHeatmap_axes",
@@ -134,11 +128,11 @@ ui <- dashboardPage(
                 fluidRow(
                     box(
                         width = 12,
-                        tags$div(align = "center",
-                                 class = "multicol",
-                                 sliderInput("nmodels", "Minimum frequency:",
-                                             min = 1, max = 10, step = 1, value = 2,
-                                             width = "30%")),
+                        div(align = "center",
+                            class = "multicol",
+                            sliderInput("nmodels", "Minimum frequency:",
+                                        min = 1, max = 10, step = 1, value = 2,
+                                        width = "30%")),
                         withSpinner(plotlyOutput("featureFreq", height = "400px", width = "98%"))
                     ),
                 ),
@@ -149,7 +143,7 @@ ui <- dashboardPage(
                 fluidRow(
                     box(
                         width = 12,
-                        withSpinner(plotlyOutput("samplePredDetails", height = "100%",  width = "98%"))
+                        withSpinner(plotlyOutput("samplePredDetails", height = "100%",  width = "98%"), proxy.height = "200px")
                     )
                 )
             ),
@@ -159,9 +153,9 @@ ui <- dashboardPage(
                 fluidRow(
                     box(
                         width = 12,
-                        withSpinner(plotlyOutput("featureDetails", height = "100%", width = "98%"))
+                        withSpinner(plotlyOutput("featureDetails", height = "100%", width = "98%"), proxy.height = "200px")
                     )
-                ),
+                )
             )
         )
     )
@@ -261,7 +255,7 @@ server <- function(input, output, session) {
             dplyr::group_by(Project) %>%
             arrange(desc(TPR_Testing)) %>%
             dplyr::mutate(Model_Rank = dplyr::row_number()) %>%
-            dplyr::arrange(Model_Rank, TPR_Testing) %>%
+            dplyr::arrange(Model_Rank, desc(TPR_Testing)) %>%
             dplyr::ungroup()
     })
 
@@ -393,18 +387,18 @@ server <- function(input, output, session) {
             dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
             dplyr::rename(Subtype = actual_value, TPR = tpr)
 
-            g <- ggplot(sub_perf, aes(x = Subtype, y = TPR, fill = Subtype)) +
-                geom_boxplot(alpha = 0.5) +
-                theme_minimal(12) +
-                labs(x = "") +
-                theme(
-                    axis.text.x = element_text(angle = 45),
-                    legend.position = "none",
-                    panel.spacing = unit(2, "lines")
-                ) +
-                facet_wrap(~cancer_id, scales="free_x", ncol = 2)
-            ggplotly(g,  height = 250*ceiling(length(unique(sub_perf$cancer_id))/2)) %>%
-                layout(margin = list(b = 50, t = 50))
+        g <- ggplot(sub_perf, aes(x = Subtype, y = TPR, fill = Subtype)) +
+            geom_boxplot(alpha = 0.5) +
+            theme_minimal(12) +
+            labs(x = "", y = "") +
+            theme(
+                axis.text.x = element_text(angle = 45),
+                legend.position = "none",
+                panel.spacing = unit(2, "lines")
+            ) +
+            facet_wrap(~cancer_id, scales = "free_x", ncol = 3)
+        ggplotly(g,  height = 250*ceiling(length(unique(sub_perf$cancer_id))/2)) %>%
+            layout(margin = list(b = 50, t = 50, l = 10, r = 10))
     })
 
     ##----------------------
