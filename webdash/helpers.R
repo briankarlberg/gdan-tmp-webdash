@@ -1,5 +1,7 @@
-require(gripql)
-require(magrittr)
+library(dplyr)
+library(stringr)
+library(rlist)
+library(gripql)
 
 hclustfunc <- function(x, method = "complete", dmeth = "euclidean") {
   hclust(dist(x, method = dmeth), method = method)
@@ -14,7 +16,7 @@ getCancers <- function(graph_name = "gdan_tmp", grip_host = "localhost:8201") {
     render("_gid") %>%
     execute() %>%
     unlist() %>%
-    stringr::str_replace("Cancer:", "") %>%
+    str_replace("Cancer:", "") %>%
     sort()
 }
 
@@ -27,20 +29,20 @@ getFeatures <- function(graph_name = "gdan_tmp", grip_host = "localhost:8201") {
     render("_gid") %>%
     execute() %>%
     unlist() %>%
-    stringr::str_replace("Feature:", "") %>%
+    str_replace("Feature:", "") %>%
     sort()
 }
 
 flatten_all <- function(results) {
   flatten_one <- function(result) {
-    fres <- rlist::list.flatten(result) %>%
-      rlist::list.subset(c("cancer_id", "model_id", "prediction_id",
-                           "data.predicted_value", "data.actual_value",
-                           "data.type", "data.repeat", "data.fold"))
-    names(fres) <- stringr::str_replace(names(fres), "data.", "")
+    fres <- list.flatten(result) %>%
+      list.subset(c("cancer_id", "model_id", "prediction_id",
+                    "data.predicted_value", "data.actual_value",
+                    "data.type", "data.repeat", "data.fold"))
+    names(fres) <- str_replace(names(fres), "data.", "")
     fres %>% as_tibble()
   }
-  res_df <- do.call(dplyr::bind_rows, lapply(results, flatten_one))
+  res_df <- do.call(bind_rows, lapply(results, flatten_one))
   res_df
 }
 
@@ -65,24 +67,24 @@ getPredictions <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "loca
                                USE.NAMES = F)
   fres %>%
     dplyr::mutate(
-      cancer_id = stringr::str_replace(cancer_id,
-                                       "Cancer:",
-                                       ""),
-      model_id = stringr::str_replace(model_id,
-                                      "Model:",
-                                      ""),
-      prediction_id = stringr::str_replace(prediction_id,
-                                           "Prediction:",
-                                           ""),
+      cancer_id = str_replace(cancer_id,
+                              "Cancer:",
+                              ""),
+      model_id = str_replace(model_id,
+                             "Model:",
+                             ""),
+      prediction_id = str_replace(prediction_id,
+                                  "Prediction:",
+                                  ""),
       predicted_value = as.factor(
-          stringr::str_replace(predicted_value,
-                               "Subtype:",
-                               "")
-          ),
+        str_replace(predicted_value,
+                    "Subtype:",
+                    "")
+      ),
       actual_value = as.factor(
-        stringr::str_replace(actual_value,
-                             "Subtype:",
-                             "")
+        str_replace(actual_value,
+                    "Subtype:",
+                    "")
       )
     )
 }
@@ -105,18 +107,18 @@ getFeatureSets <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "loca
   fres <- do.call(bind_rows, lapply(results, as_tibble))
   fres %>%
     dplyr::mutate(
-      cancer_id = stringr::str_replace(cancer_id,
-                                       "Cancer:",
-                                       ""),
-      model_id = stringr::str_replace(model_id,
-                                      "Model:",
-                                      ""),
-      featureset_id = stringr::str_replace(featureset_id,
-                                           "FeatureSet:",
-                                           ""),
-      feature_id = stringr::str_replace(feature_id,
-                                        "Feature:",
-                                        "")
+      cancer_id = str_replace(cancer_id,
+                              "Cancer:",
+                              ""),
+      model_id = str_replace(model_id,
+                             "Model:",
+                             ""),
+      featureset_id = str_replace(featureset_id,
+                                  "FeatureSet:",
+                                  ""),
+      feature_id = str_replace(feature_id,
+                               "Feature:",
+                               "")
     )
 }
 
@@ -145,11 +147,11 @@ getFeatureVals <- function(features, graph_name = "gdan_tmp", grip_host = "local
   fres <- do.call(bind_rows, lapply(results, as_tibble))
   fres %>%
     dplyr::mutate(
-      sample_id = stringr::str_replace(sample_id,
-                                       "Sample:",
-                                       ""),
-      feature_id = stringr::str_replace(feature_id,
-                                        "Feature:",
-                                        "")
+      sample_id = str_replace(sample_id,
+                              "Sample:",
+                              ""),
+      feature_id = str_replace(feature_id,
+                               "Feature:",
+                               "")
     )
 }
