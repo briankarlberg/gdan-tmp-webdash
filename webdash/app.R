@@ -347,8 +347,8 @@ server <- function(input, output, session) {
                             into = c("datatype", "platform1", "platform2", "featureid1", "featureid2", "extra"),
                             remove = F) %>%
             dplyr::count(platform1) %>%
-            mutate(share = n / sum(n) * 100) %>%
-            arrange(desc(share)) %>%
+            dplyr::mutate(share = n / sum(n) * 100) %>%
+            dplyr::arrange(desc(share)) %>%
             plot_ly(labels = ~platform1, values = ~share,  type = "pie",
                     textposition = 'inside',
                     textinfo = 'label+percent',
@@ -364,7 +364,7 @@ server <- function(input, output, session) {
             dplyr::summarize(model_occurence = as.factor(n())) %>%
             dplyr::ungroup() %>%
             dplyr::group_by(model_occurence) %>%
-            summarize(count = n())
+            dplyr::summarize(count = n())
 
         g <- ggplot(fcount, aes(model_occurence, count)) +
             geom_bar(stat = "identity") +
@@ -528,7 +528,7 @@ server <- function(input, output, session) {
             df_subset <- cancer_preds() %>%
                 dplyr::filter(type == input$set_selection) %>%
                 dplyr::filter(sample_id %in% input$sample_selection) %>%
-                mutate(sample_label = paste(sample_id, actual_value, sep = " - Subtype: "))
+                dplyr::mutate(sample_label = paste(sample_id, actual_value, sep = " - Subtype: "))
             g <- ggplot(df_subset, aes(x = prediction_id)) +
                 geom_bar(aes(fill = predicted_value), position = "fill") +
                 scale_fill_manual(values = c(cancer_subtype_colors(), "grey")) +
