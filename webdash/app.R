@@ -55,7 +55,9 @@ ui <- dashboardPage(
                 fluidRow(
                     box(
                         width = 12,
+                        div(style = 'height: 750px; overflow-y: auto',
                         withSpinner(DT::DTOutput("modelTable"))
+                        )
                     ),
                     box(
                         width = 4,
@@ -77,12 +79,19 @@ ui <- dashboardPage(
                     box(
                         width = 4,
                         title = "Feature Types",
-                        plotlyOutput("featureTypeBox", height = 300)
+                        plotlyOutput("featureTypeBox", height = 300, width = "98%")
                     ),
                     box(
                         width = 4,
                         title = "Feature Frequency",
-                        plotlyOutput("featureFreqBox", height = 300)
+                        plotlyOutput("featureFreqBox", height = 300, width = "98%")
+                    ),
+                    box(
+                        width = 12,
+                        title = "Panel Performance",
+                        div(style = 'height: 650px; overflow-y: auto',
+                            plotlyOutput("performanceBox", height = "100%", width = "98%")
+                        )
                     )
                 )
             ),
@@ -213,17 +222,21 @@ server <- function(input, output, session) {
 
     model_summary <- reactive({
         dplyr::left_join(
-            predictions() %>%
-                dplyr::group_by(cancer_id, model_id, featureset_id, type) %>%
-                dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                                 total = n()) %>%
-                dplyr::ungroup() %>%
-                dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
-                dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
-                tidyr::spread(type, tpr) %>%
+            dplyr::left_join(
+                predictions() %>%
+                    dplyr::group_by(cancer_id, model_id, featureset_id, type) %>%
+                    dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
+                                     total = n()) %>%
+                    dplyr::ungroup() %>%
+                    dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
+                    dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
+                    tidyr::spread(type, tpr),
+                predictions() %>%
+                    dplyr::select(cancer_id, model_id, featureset_id, prediction_id) %>%
+                    dplyr::distinct()
+            ) %>%
                 dplyr::rename(Project = cancer_id, Model = model_id, Features = featureset_id,
                               TPR_Training = training, TPR_Testing = testing),
-
             featureSets() %>%
                 dplyr::group_by(featureset_id, cancer_id) %>%
                 dplyr::summarize(N_Features = n()) %>%
@@ -243,7 +256,7 @@ server <- function(input, output, session) {
     })
 
     output$modelTable <- DT::renderDT({
-        model_summary() %>% dplyr::select(-Model_Rank)
+        model_summary() %>% dplyr::select(-Model_Rank, -prediction_id)
     },
     filter = "top",
     rownames = FALSE,
@@ -329,7 +342,36 @@ server <- function(input, output, session) {
             theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45),
                   legend.position = "none")
         ggplotly(g)
+    })
 
+    output$performanceBox <- renderPlotly({
+
+        selected <- model_summary() %>%
+            dplyr::slice(input$modelTable_rows_selected) %>%
+            dplyr::pull(prediction_id)
+
+        sub_perf <- predictions() %>%
+            dplyr::filter(prediction_id %in% selected,
+                          type == "testing") %>%
+            dplyr::group_by(cancer_id, model_id, featureset_id, `repeat`, fold, actual_value) %>%
+            dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
+                             total = n()) %>%
+            dplyr::ungroup() %>%
+            dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
+            dplyr::rename(Subtype = actual_value, TPR = tpr)
+
+            g <- ggplot(sub_perf, aes(x = Subtype, y = TPR, fill = Subtype)) +
+                geom_boxplot(alpha = 0.5) +
+                theme_minimal(12) +
+                labs(x = "") +
+                theme(
+                    axis.text.x = element_text(angle = 45),
+                    legend.position = "none",
+                    panel.spacing = unit(2, "lines")
+                ) +
+                facet_wrap(~cancer_id, scales="free_x", ncol = 2)
+            ggplotly(g,  height = 250*ceiling(length(unique(sub_perf$cancer_id))/2)) %>%
+                layout(margin = list(b = 50, t = 50))
     })
 
     ##----------------------
