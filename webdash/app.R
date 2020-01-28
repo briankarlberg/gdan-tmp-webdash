@@ -271,13 +271,14 @@ server <- function(input, output, session) {
     })
 
     output$modelTable <- DT::renderDT({
-        model_summary() %>% dplyr::select(-Model_Rank, -Date, -prediction_id)
+        model_summary() %>% dplyr::select(-Model_Rank, -Date)
     },
     filter = "top",
     rownames = FALSE,
     selection = list(selected = selected_models(), target = "row"),
     options = list(
-        scrollX = TRUE
+        scrollX = TRUE,
+        columnDefs = list(list(visible=FALSE, targets=c(5)))
     ))
 
     output$selectedModelsBox <- renderUI({
