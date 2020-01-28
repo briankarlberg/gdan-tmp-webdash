@@ -28,3 +28,16 @@ services:
       - 8202:8202
     depends_on:
       - mongo
+
+  shiny:
+    build: shiny-server
+    container_name: shiny
+    environment:
+      GRIP_HOST: grip:8201
+      GDAN_TMP_GRAPH: gdan_tmp
+    volumes:
+      - ./configs/shiny-server.conf:/etc/shiny-server/shiny-server.conf
+      - ./webdash:/srv/shiny-server/GDAN-TMP:ro
+      - ./data:/mnt/data:ro
+    ports:
+      - 3838:3838

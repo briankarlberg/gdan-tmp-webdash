@@ -7,6 +7,53 @@ library(dplyr)
 
 source("helpers.R")
 
+##-------------------------
+## Global variables
+##-------------------------
+cancers <- getCancers()
+features <- getFeatures()
+
+# featureSets <- getFeatureSets(NULL)
+# predictions <- getPredictions(NULL)
+
+source("load_test_data.R")
+featureSets <- feature_sets
+predictions <- preds
+
+model_summary <- dplyr::left_join(
+    dplyr::left_join(
+        predictions %>%
+        dplyr::group_by(cancer_id, model_id, featureset_id, type) %>%
+        dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
+                         total = n()) %>%
+        dplyr::ungroup() %>%
+        dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
+        dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
+        tidyr::spread(type, tpr),
+        predictions %>%
+        dplyr::select(cancer_id, model_id, featureset_id, date, prediction_id) %>%
+        dplyr::distinct()
+    ) %>%
+    dplyr::rename(Project = cancer_id, Model = model_id, Features = featureset_id,
+                  Date = date, TPR_Training = training, TPR_Testing = testing),
+    featureSets %>%
+    dplyr::group_by(featureset_id, cancer_id) %>%
+    dplyr::summarize(N_Features = n()) %>%
+    dplyr::ungroup() %>%
+    dplyr::rename(Features = featureset_id, Project = cancer_id)
+) %>%
+    dplyr::group_by(Project) %>%
+    dplyr::arrange(desc(TPR_Testing)) %>%
+    dplyr::mutate(Model_Rank = dplyr::row_number()) %>%
+    dplyr::arrange(Model_Rank, desc(TPR_Testing)) %>%
+    dplyr::ungroup()
+
+selected_models <- which(paste(model_summary$Project, model_summary$Model_Rank, sep = "|") %in% paste(cancers, 1,  sep = "|"))
+
+
+##-------------------------
+## UI
+##-------------------------
 ui <- dashboardPage(
     skin = "black",
     dashboardHeader(title = "GDAN TMP"),
@@ -163,26 +210,7 @@ ui <- dashboardPage(
 
 # TODO: use the future and promises packages
 # https://blog.rstudio.com/2018/06/26/shiny-1-1-0/
-#
 server <- function(input, output, session) {
-    ##--------------------
-    ## Global Data
-    ##--------------------
-    source("load_test_data.R")
-
-    featureSets <- reactive({
-        # getFeatureSets(NULL)
-        feature_sets
-    })
-
-    predictions <- reactive({
-        # getPredictions(NULL)
-        preds
-    })
-
-    # cancers <- getCancers()
-    # features <- getFeatures()
-
     ##--------------------
     ## Sidebar filters
     ##--------------------
@@ -211,7 +239,7 @@ server <- function(input, output, session) {
     cancer_subtype_colors <- reactiveVal(c())
 
     observeEvent(input$cancer_selection, {
-        res <- predictions() %>%
+        res <- predictions %>%
             dplyr::filter(cancer_id == input$cancer_selection) %>%
             droplevels()
         if (dim(res)[1] > 0) {
@@ -229,47 +257,12 @@ server <- function(input, output, session) {
     ## Panel Builder Tab
     ##--------------------
 
-    model_summary <- reactive({
-        dplyr::left_join(
-            dplyr::left_join(
-                predictions() %>%
-                    dplyr::group_by(cancer_id, model_id, featureset_id, type) %>%
-                    dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                                     total = n()) %>%
-                    dplyr::ungroup() %>%
-                    dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
-                    dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
-                    tidyr::spread(type, tpr),
-                predictions() %>%
-                    dplyr::select(cancer_id, model_id, featureset_id, date, prediction_id) %>%
-                    dplyr::distinct()
-            ) %>%
-                dplyr::rename(Project = cancer_id, Model = model_id, Features = featureset_id,
-                              Date = date, TPR_Training = training, TPR_Testing = testing),
-            featureSets() %>%
-                dplyr::group_by(featureset_id, cancer_id) %>%
-                dplyr::summarize(N_Features = n()) %>%
-                dplyr::ungroup() %>%
-                dplyr::rename(Features = featureset_id, Project = cancer_id)
-        ) %>%
-            dplyr::group_by(Project) %>%
-            arrange(desc(TPR_Testing)) %>%
-            dplyr::mutate(Model_Rank = dplyr::row_number()) %>%
-            dplyr::arrange(Model_Rank, desc(TPR_Testing)) %>%
-            dplyr::ungroup()
-    })
-
-    selected_models <- reactive({
-        ms <- model_summary()
-        which(paste(ms$Project, ms$Model_Rank, sep = "|") %in% paste(cancers, 1,  sep = "|"))
-    })
-
     output$modelTable <- DT::renderDT({
-        model_summary() %>% dplyr::select(-Model_Rank, -Date)
+        model_summary %>% dplyr::select(-Model_Rank, -Date)
     },
     filter = "top",
     rownames = FALSE,
-    selection = list(selected = selected_models(), target = "row"),
+    selection = list(selected = selected_models, target = "row"),
     options = list(
         scrollX = TRUE,
         columnDefs = list(list(visible=FALSE, targets=c(5)))
@@ -277,7 +270,7 @@ server <- function(input, output, session) {
 
     output$selectedModelsBox <- renderUI({
         if (length(input$modelTable_rows_selected) > 0) {
-            selected <- model_summary() %>%
+            selected <- model_summary %>%
                 dplyr::slice(input$modelTable_rows_selected) %>%
                 dplyr::pull(prediction_id) %>%
                 paste(collapse = "<br/><br/>")
@@ -291,14 +284,14 @@ server <- function(input, output, session) {
     })
 
     output$totalFeaturesBox <- renderText({
-        model_summary() %>%
+        model_summary %>%
             dplyr::slice(input$modelTable_rows_selected) %>%
             dplyr::pull(N_Features) %>%
             sum()
     })
 
     output$classificationErrorBox <- renderText({
-        model_summary() %>%
+        model_summary %>%
             dplyr::slice(input$modelTable_rows_selected) %>%
             dplyr::pull(TPR_Testing) %>%
             mean()
@@ -306,10 +299,10 @@ server <- function(input, output, session) {
 
     selected_panel_features <- reactive({
         inner_join(
-            model_summary() %>%
+            model_summary %>%
                 dplyr::slice(input$modelTable_rows_selected) %>%
                 dplyr::select(featureset_id = Features, cancer_id = Project),
-            featureSets()
+            featureSets
         )
     })
 
@@ -373,11 +366,11 @@ server <- function(input, output, session) {
 
     output$performanceBox <- renderPlotly({
 
-        selected <- model_summary() %>%
+        selected <- model_summary %>%
             dplyr::slice(input$modelTable_rows_selected) %>%
             dplyr::pull(prediction_id)
 
-        sub_perf <- predictions() %>%
+        sub_perf <- predictions %>%
             dplyr::filter(prediction_id %in% selected,
                           type == "testing") %>%
             dplyr::group_by(cancer_id, model_id, featureset_id, `repeat`, actual_value) %>%
@@ -423,7 +416,7 @@ server <- function(input, output, session) {
         pred_mat <- avg_pred_wide %>% dplyr::select(-prediction_id) %>% as.matrix()
         row.names(pred_mat) <- avg_pred_wide$prediction_id
 
-        subtypes <-  cancer_preds() %>%
+        subtypes <- cancer_preds() %>%
             dplyr::select(sample_id, actual_value) %>%
             dplyr::distinct() %>%
             dplyr::arrange(base::match(sample_id, colnames(pred_mat))) %>%
@@ -479,7 +472,7 @@ server <- function(input, output, session) {
     })
 
     output$featureFreq <- renderPlotly({
-        fset <- featureSets() %>% dplyr::filter(cancer_id  == input$cancer_selection)
+        fset <- featureSets %>% dplyr::filter(cancer_id  == input$cancer_selection)
         fset_sub <- dplyr::left_join(
             fset,
             fset %>% dplyr::count(feature_id, name = "count")
@@ -551,12 +544,11 @@ server <- function(input, output, session) {
     ## Feature Distributions Tab
     ##---------------------------
     feature_subset <- reactiveVal(tibble())
-    cancer_feature_subset <-  reactiveVal(tibble())
 
     observeEvent(length(input$feature_selection), {
         if (length(input$feature_selection) > 0) {
-            # vals <- getFeaturesValues(input$feature_selection)
-            vals <- feature_vals %>% dplyr::filter(feature_id %in% input$feature_selection)
+            vals <- getFeatureVals(input$feature_selection)
+            # vals <- feature_vals %>% dplyr::filter(feature_id %in% input$feature_selection)
             feature_subset(vals)
         } else {
             feature_subset(tibble())
@@ -566,45 +558,41 @@ server <- function(input, output, session) {
     # TODO change cancer filter to allow for multiple selections
     observeEvent(c(dim(feature_subset())[1], input$cancer_selection), {
         if (dim(feature_subset())[1] > 0) {
-            vals <- dplyr::inner_join(
-                predictions() %>%
+            sub <- dplyr::inner_join(
+                predictions %>%
                     dplyr::filter(cancer_id == input$cancer_selection) %>%
                     dplyr::select(sample_id, subtype_id = actual_value) %>%
                     dplyr::distinct(),
                 feature_subset()
             )
-            cancer_feature_subset(vals)
-        } else {
-            cancer_feature_subset(tibble())
-        }
-    })
-
-    output$featureDetails <- renderPlotly({
-        sub <- cancer_feature_subset()
-        if (dim(sub)[1] > 0) {
             nfeatures <- length(unique(sub$feature_id))
-            g <- ggplot(sub,
-                        aes(x = subtype_id,
-                            y = value,
-                            fill = subtype_id)) +
-                geom_violin(colour = NA, na.rm = T, alpha = 0.5) +
-                geom_jitter(width = 0.05, height = 0.05) +
-                coord_flip() +
-                labs(y = "", x = "", fill = "") +
-                theme_minimal() +
-                theme(axis.text.y = element_blank()) +
-                facet_wrap(~feature_id, ncol = 2, scales = "free_x")
-            ggplotly(
-                g,
-                tooltip = c("x", "y"),
-                height = 300*ceiling(nfeatures/2)
-            )
+            
+            output$featureDetails <- renderPlotly({
+                g <- ggplot(sub,
+                            aes(x = subtype_id,
+                                y = value,
+                                fill = subtype_id)) +
+                    geom_violin(colour = NA, na.rm = T, alpha = 0.5) +
+                    geom_jitter(width = 0.05, height = 0.05) +
+                    coord_flip() +
+                    labs(y = "", x = "", fill = "") +
+                    theme_minimal() +
+                    theme(axis.text.y = element_blank()) +
+                    facet_wrap(~feature_id, ncol = 2, scales = "free_x")
+                ggplotly(
+                    g,
+                    tooltip = c("x", "y"),
+                    height = 300*ceiling(nfeatures/2)
+                )               
+            })
         } else {
-            g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Features"),
-                        aes(x, y)) +
-                geom_text(aes(label = z), size = 10) +
-                theme_void()
-            ggplotly(g, height = 400)
+            output$featureDetails <- renderPlotly({
+                g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Features"),
+                            aes(x, y)) +
+                    geom_text(aes(label = z), size = 10) +
+                    theme_void()
+                ggplotly(g, height = 400)
+            })
         }
     })
 
