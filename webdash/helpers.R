@@ -71,6 +71,9 @@ getPredictions <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "loca
       model_id = stringr::str_replace(model_id,
                                       "Model:",
                                       ""),
+      prediction_id = stringr::str_replace(prediction_id,
+                                           "Prediction:",
+                                           ""),
       predicted_value = as.factor(
           stringr::str_replace(predicted_value,
                                "Subtype:",

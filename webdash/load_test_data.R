@@ -2,7 +2,7 @@ library(foreach)
 library(magrittr)
 
 output_files <- list.files("/Users/strucka/Projects/gdan-tmp-webdash/data/struck-outputs", "randomforest", full.names = T)
-preds <- foreach(f = output_files, .combine = dplyr::bind_rows) %do% {
+preds <- foreach(f = output_files[1:3], .combine = dplyr::bind_rows) %do% {
   data.table::fread(f) %>%
     dplyr::as_tibble() %>%
     tidyr::gather(-Sample_ID, -Repeat, -Fold, -Test, -Label, key = "prediction_id", value = "predicted_value") %>%

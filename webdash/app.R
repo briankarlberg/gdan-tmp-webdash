@@ -21,10 +21,71 @@ ui <- dashboardPage(
             menuItem("Feature Distributions", tabName = "features")
         ),
         br(),
-        uiOutput("filters")
+        conditionalPanel(
+            "input.tabs != 'models'",
+            selectizeInput(inputId = "cancer_selection",
+                           label = "Cancer Type",
+                           choices = NULL)
+        ),
+        conditionalPanel(
+            "input.tabs == 'predictions' || input.tabs == 'samples'",
+            selectizeInput(inputId = "set_selection",
+                           label = "Data Subset",
+                           choices = c("testing", "training"))
+        ),
+        conditionalPanel(
+            "input.tabs == 'samples'",
+            selectizeInput(inputId = "sample_selection",
+                           label = "Select Sample(s)",
+                           choices = NULL,
+                           multiple = T)
+        ),
+        conditionalPanel(
+            "input.tabs == 'features'",
+            selectizeInput(inputId = "feature_selection",
+                           label = "Select Features(s)",
+                           choices = NULL,
+                           multiple = T)
+        )
     ),
     dashboardBody(
         tabItems(
+            tabItem(
+                tabName = "models",
+                fluidRow(
+                    box(
+                        width = 12,
+                        withSpinner(DT::DTOutput("modelTable"))
+                    ),
+                    box(
+                        width = 4,
+                        title = "Selected Models",
+                        div(style = 'height: 403px; overflow-y: auto',
+                            uiOutput("selectedModelsBox")
+                        )
+                    ),
+                    box(
+                        width = 4,
+                        title = "Total Features",
+                        textOutput("totalFeaturesBox")
+                    ),
+                    box(
+                        width = 4,
+                        title = "Mean TPR",
+                        textOutput("classificationErrorBox")
+                    ),
+                    box(
+                        width = 4,
+                        title = "Feature Types",
+                        plotlyOutput("featureTypeBox", height = 300)
+                    ),
+                    box(
+                        width = 4,
+                        title = "Feature Frequency",
+                        plotlyOutput("featureFreqBox", height = 300)
+                    )
+                )
+            ),
             tabItem(
                 tabName = "predictions",
                 h1("Compare Models"),
@@ -54,7 +115,7 @@ ui <- dashboardPage(
                                  sliderInput("nmodels", "Minimum frequency:",
                                              min = 1, max = 10, step = 1, value = 2,
                                              width = "30%")),
-                        withSpinner(plotlyOutput("featureFreq", height = "100%", width = "98%"))
+                        withSpinner(plotlyOutput("featureFreq", height = "400px", width = "98%"))
                     ),
                 ),
             ),
@@ -77,31 +138,6 @@ ui <- dashboardPage(
                         withSpinner(plotlyOutput("featureDetails", height = "100%", width = "98%"))
                     )
                 ),
-            ),
-            tabItem(
-                tabName = "models",
-                # h1("Models"),
-                fluidRow(
-                    box(
-                        width = 12,
-                        withSpinner(DT::DTOutput("modelTable"))
-                    ),
-                    box(
-                        width = 4,
-                        title = "Selected Models",
-                        uiOutput("selectedModelsBox")
-                    ),
-                    box(
-                        width = 4,
-                        title = "Total Features",
-                        textOutput("totalFeaturesBox")
-                    ),
-                    box(
-                        width = 4,
-                        title = "Mean Classification Error",
-                        textOutput("classificationErrorBox")
-                    )
-                )
             )
         )
     )
@@ -110,7 +146,7 @@ ui <- dashboardPage(
 # TODO: use the future and promises packages
 # https://blog.rstudio.com/2018/06/26/shiny-1-1-0/
 #
-server <- function(input, output) {
+server <- function(input, output, session) {
     ##--------------------
     ## Global Data
     ##--------------------
@@ -118,16 +154,13 @@ server <- function(input, output) {
 
     featureSets <- reactive({
         # getFeatureSets(NULL)
-        # acc_feature_set'
         feature_sets
     })
 
     predictions <- reactive({
         # getPredictions(NULL)
-        # acc_preds
         preds
     })
-
 
     # cancers <- getCancers()
     # features <- getFeatures()
@@ -135,49 +168,22 @@ server <- function(input, output) {
     ##--------------------
     ## Sidebar filters
     ##--------------------
-    output$filters <- renderUI({
-        if (input$tabs == "predictions") {
-            div(
-                selectInput(inputId = "cancer_selection",
-                            label = "Cancer Type",
-                            choices = cancers,
-                            selected = input$cancer_selection),
-                selectInput(inputId = "set_selection",
-                            label = "Data Subset",
-                            choices = c("testing", "training"),
-                            selected = input$set_selection)
-            )
-        } else if (input$tabs == "features") {
-            div(
-                selectInput(inputId = "cancer_selection",
-                            label = "Cancer Type",
-                            choices = cancers,
-                            selected = input$cancer_selection),
-                selectizeInput(inputId = "feature_selection",
-                               label = "Select Features(s)",
-                               choices = features,
-                               selected = input$feature_selection,
-                               multiple = T)
-            )
-        } else if (input$tabs == "samples") {
-            div(
-                selectInput(inputId = "cancer_selection",
-                            label = "Cancer Type",
-                            choices = cancers,
-                            selected = input$cancer_selection),
-                selectInput(inputId = "set_selection",
-                            label = "Data Subset",
-                            choices = c("testing", "training"),
-                            selected = input$set_selection),
-                selectizeInput(inputId = "sample_selection",
-                               label = "Select Sample(s)",
-                               choices = unique(cancer_preds()$sample_id),
-                               multiple = T,
-                               selected = input$sample_selection)
-            )
-        } else {
-            div()
-        }
+
+    updateSelectizeInput(session = session,
+                         inputId = 'cancer_selection',
+                         choices = cancers,
+                         server = FALSE)
+
+    updateSelectizeInput(session = session,
+                         inputId = 'feature_selection',
+                         choices = features,
+                         server = TRUE)
+
+    observe({
+        updateSelectizeInput(session = session,
+                             inputId = 'sample_selection',
+                             choices =  unique(cancer_preds()$sample_id),
+                             server = TRUE)
     })
 
     ##----------------------
@@ -216,34 +222,32 @@ server <- function(input, output) {
                 dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
                 tidyr::spread(type, tpr) %>%
                 dplyr::rename(Project = cancer_id, Model = model_id, Features = featureset_id,
-                              TPR_Training = training, TPR_Testing = testing) %>%
-                dplyr::arrange(desc(TPR_Testing)),
+                              TPR_Training = training, TPR_Testing = testing),
 
             featureSets() %>%
-                # tidyr::separate(feature_id,
-                #                 sep = "\\:",
-                #                 into = c("datatype", "platform1", "platform2", "featureid1", "featureid2", "extra"),
-                #                 remove = F) %>%
-                # dplyr::mutate(platform = paste(platform1, platform2, sep="")) %>%
                 dplyr::group_by(featureset_id, cancer_id) %>%
                 dplyr::summarize(N_Features = n()) %>%
                 dplyr::ungroup() %>%
                 dplyr::rename(Features = featureset_id, Project = cancer_id)
-        )
+        ) %>%
+            dplyr::group_by(Project) %>%
+            arrange(desc(TPR_Testing)) %>%
+            dplyr::mutate(Model_Rank = dplyr::row_number()) %>%
+            dplyr::arrange(Model_Rank, TPR_Testing) %>%
+            dplyr::ungroup()
     })
 
-    # selected_models <- reactive({
-    #     model_summary() %>%
-    #         group_by(project) %>%
-    #         filter(TPR_Testing == max(TPR_Testing)) %>%
-    # })
+    selected_models <- reactive({
+        ms <- model_summary()
+        which(paste(ms$Project, ms$Model_Rank, sep = "|") %in% paste(cancers, 1,  sep = "|"))
+    })
 
     output$modelTable <- DT::renderDT({
-        model_summary()
+        model_summary() %>% dplyr::select(-Model_Rank)
     },
     filter = "top",
     rownames = FALSE,
-    selection = list(selected = c(1, 3), target = "row"),
+    selection = list(selected = selected_models(), target = "row"),
     options = list(
         scrollX = TRUE
     ))
@@ -254,8 +258,78 @@ server <- function(input, output) {
                 dplyr::slice(input$modelTable_rows_selected) %>%
                 dplyr::pull(Model) %>%
                 paste(collapse = "<br/>")
-            shiny::HTML(selected_models)
+            shiny::HTML(
+                sprintf(
+                    "<div>%s</div>",
+                    selected_models
+                )
+            )
         }
+    })
+
+    output$totalFeaturesBox <- renderText({
+        model_summary() %>%
+            dplyr::slice(input$modelTable_rows_selected) %>%
+            dplyr::pull(N_Features) %>%
+            sum()
+    })
+
+    output$classificationErrorBox <- renderText({
+        model_summary() %>%
+            dplyr::slice(input$modelTable_rows_selected) %>%
+            dplyr::pull(TPR_Testing) %>%
+            mean()
+    })
+
+    selected_features <- reactive({
+        fsets <- model_summary() %>%
+            dplyr::slice(input$modelTable_rows_selected) %>%
+            dplyr::pull(Features)
+        projects <- model_summary() %>%
+            dplyr::slice(input$modelTable_rows_selected) %>%
+            dplyr::pull(Project)
+
+        featureSets() %>%
+            filter(featureset_id %in% fsets,
+                   cancer_id %in% projects)
+    })
+
+    output$featureTypeBox <- renderPlotly({
+        selected_features() %>%
+            tidyr::separate(feature_id,
+                            sep = "\\:",
+                            into = c("datatype", "platform1", "platform2", "featureid1", "featureid2", "extra"),
+                            remove = F) %>%
+            dplyr::count(platform1) %>%
+            mutate(share = n / sum(n) * 100) %>%
+            arrange(desc(share)) %>%
+            plot_ly(labels = ~platform1, values = ~share,  type = "pie",
+                    textposition = 'inside',
+                    textinfo = 'label+percent',
+                    insidetextfont = list(color = '#FFFFFF', size = 15),
+                    hoverinfo = 'text',
+                    text = ~paste(round(share, digits = 2), '%'),
+                    showlegend = FALSE)
+    })
+
+    output$featureFreqBox <- renderPlotly({
+        fcount <- selected_features() %>%
+            dplyr::group_by(feature_id) %>%
+            dplyr::summarize(model_occurence = as.factor(n())) %>%
+            dplyr::ungroup() %>%
+            dplyr::group_by(model_occurence) %>%
+            summarize(count = n())
+
+        g <- ggplot(fcount, aes(model_occurence, count)) +
+            geom_bar(stat = "identity") +
+            scale_y_continuous(breaks = scales::pretty_breaks()) +
+            labs(y = "Count", x = "Number of Models", title = "") +
+            coord_flip() +
+            theme_minimal(12) +
+            theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45),
+                  legend.position = "none")
+        ggplotly(g)
+
     })
 
     ##----------------------
@@ -346,17 +420,24 @@ server <- function(input, output) {
             dplyr::summarise(feature_sets = toString(featureset_id)) %>%
             dplyr::ungroup() %>%
             dplyr::arrange(desc(count)) %>%
-            dplyr::mutate(feature_id = reorder(feature_id, -count))
+            dplyr::mutate(feature_id = reorder(feature_id, -count)) %>%
+            dplyr::filter(count >= input$nmodels)
 
-        g <- fset_sub %>%
-            dplyr::filter(count >= input$nmodels) %>%
-            ggplot(aes(feature_id, count)) +
-            geom_bar(aes(size = feature_sets), stat = "identity") +
-            scale_y_continuous(breaks = scales::pretty_breaks()) +
-            labs(y = "# of Models", x = "") +
-            theme_minimal(15) +
-            theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45),
-                  legend.position = "none")
+        if (dim(fset_sub)[1] > 0) {
+            g <- fset_sub %>%
+                ggplot(aes(feature_id, count)) +
+                geom_bar(aes(size = feature_sets), stat = "identity") +
+                scale_y_continuous(breaks = scales::pretty_breaks()) +
+                labs(y = "# of Models", x = "") +
+                theme_minimal(15) +
+                theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45),
+                      legend.position = "none")
+        } else {
+            g <- ggplot(data.frame(x = 1, y = 1, z = sprintf("No Features Appeared >= %s Times", input$nmodels)),
+                        aes(x, y)) +
+                geom_text(aes(label = z), size = 10) +
+                theme_void()
+        }
         ggplotly(g, height = 400)
     })
 
