@@ -3,11 +3,17 @@ library(stringr)
 library(rlist)
 library(gripql)
 
+DEFAULT_GRAPH <- ifelse(Sys.getenv("GDAN_TMP_GRAPH") == "", "gdan_tmp", Sys.getenv("GDAN_TMP_GRAPH"))
+DEFAULT_GRIP_HOST <- ifelse(Sys.getenv("GRIP_HOST") == "", "localhost:8201", Sys.getenv("GRIP_HOST"))
+
+message("GRIP HOST: ", DEFAULT_GRIP_HOST)
+message("GRAPH: ", DEFAULT_GRAPH)
+
 hclustfunc <- function(x, method = "complete", dmeth = "euclidean") {
   hclust(dist(x, method = dmeth), method = method)
 }
 
-getCancers <- function(graph_name = "gdan_tmp", grip_host = "localhost:8201") {
+getCancers <- function(graph_name = DEFAULT_GRAPH, grip_host = DEFAULT_GRIP_HOST) {
   gripql(grip_host) %>%
     graph(graph_name) %>%
     query() %>%
@@ -20,7 +26,7 @@ getCancers <- function(graph_name = "gdan_tmp", grip_host = "localhost:8201") {
     sort()
 }
 
-getFeatures <- function(graph_name = "gdan_tmp", grip_host = "localhost:8201") {
+getFeatures <- function(graph_name = DEFAULT_GRAPH, grip_host = DEFAULT_GRIP_HOST) {
   gripql(grip_host) %>%
     graph(graph_name) %>%
     query() %>%
@@ -46,7 +52,7 @@ flatten_all <- function(results) {
   res_df
 }
 
-getPredictions <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "localhost:8201") {
+getPredictions <- function(cancer_id, graph_name = DEFAULT_GRAPH, grip_host = DEFAULT_GRIP_HOST) {
   results <- gripql(grip_host) %>%
     graph(graph_name) %>%
     query() %>%
@@ -89,7 +95,7 @@ getPredictions <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "loca
     )
 }
 
-getFeatureSets <- function(cancer_id, graph_name = "gdan_tmp", grip_host = "localhost:8201") {
+getFeatureSets <- function(cancer_id, graph_name = DEFAULT_GRAPH, grip_host = DEFAULT_GRIP_HOST) {
   results <- gripql(grip_host) %>%
     graph(graph_name) %>%
     query() %>%
@@ -132,7 +138,7 @@ within <- function(k, values) {
   list("condition" = list("key" = k, "value" = values, "condition" = "WITHIN"))
 }
 
-getFeatureVals <- function(features, graph_name = "gdan_tmp", grip_host = "localhost:8201") {
+getFeatureVals <- function(features, graph_name = DEFAULT_GRAPH, grip_host = DEFAULT_GRIP_HOST) {
   selected_features <- paste("Feature", features, sep = ":")
 
   results <- gripql(grip_host) %>%

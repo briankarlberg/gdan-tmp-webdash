@@ -1,9 +1,9 @@
 library(foreach)
 library(magrittr)
 
-output_files <- list.files("/Users/strucka/Projects/gdan-tmp-webdash/data/struck-outputs", "randomforest", full.names = T)
+output_files <- list.files("/mnt/data/struck-outputs", "randomforest", full.names = T)
 message("loading prediction files...")
-preds <- foreach(f = output_files, .combine = dplyr::bind_rows) %do% {
+preds <- foreach(f = output_files[1], .combine = dplyr::bind_rows) %do% {
   data.table::fread(f) %>%
     dplyr::as_tibble() %>%
     tidyr::gather(-Sample_ID, -Repeat, -Fold, -Test, -Label, key = "prediction_id", value = "predicted_value") %>%
@@ -18,7 +18,7 @@ preds <- foreach(f = output_files, .combine = dplyr::bind_rows) %do% {
                 date = as.Date(date)) %>%
   tidyr::separate(model_id, "\\:", into = c("cancer_id", "model_id"))
 
-feature_sets_file <- "/Users/strucka/Projects/gdan-tmp-webdash/data/struck-outputs/featuresets_struck.tsv"
+feature_sets_file <- "/mnt/data/struck-outputs/featuresets_struck.tsv"
 message("loading feature set files...")
 feature_sets <- data.table::fread(feature_sets_file) %>%
   dplyr::as_tibble() %>%
@@ -30,20 +30,21 @@ feature_sets <- data.table::fread(feature_sets_file) %>%
                 cancer_id = TCGA_Projects,
                 feature_id = Features)
 
-feature_files <- list.files("/Users/strucka/Projects/gdan-tmp-webdash/data/v7-matrices/", ".tsv", full.names = T)
-message("loading feature matrices...")
-feature_vals <- foreach(f = feature_files, .combine = dplyr::bind_rows) %do% {
-  data.table::fread(f) %>%
-    dplyr::as_tibble() %>%
-    dplyr::rename(Sample_ID = 1) %>%
-    dplyr::select(-Labels) %>%
-    tidyr::gather(-Sample_ID, key = "feature_id", value = "value")
-} %>%
-  dplyr::rename(sample_id = Sample_ID)
+## feature_files <- list.files("/mnt/data/v7-matrices/", ".tsv", full.names = T)
+## message("loading feature matrices...")
+## feature_vals <- foreach(f = feature_files[1], .combine = dplyr::bind_rows) %do% {
+##   message(sprintf("loading %s", f))
+##   data.table::fread(f) %>%
+##     dplyr::as_tibble() %>%
+##     dplyr::rename(Sample_ID = 1) %>%
+##     dplyr::select(-Labels) %>%
+##     tidyr::gather(-Sample_ID, key = "feature_id", value = "value")
+## } %>%
+##   dplyr::rename(sample_id = Sample_ID)
 
-message("defining cancer and feature lists...")
-cancers <- preds %>% dplyr::pull(cancer_id) %>% unique()
-features <- feature_vals %>% dplyr::pull(feature_id) %>% unique()
+## message("defining cancer and feature lists...")
+## cancers <- preds %>% dplyr::pull(cancer_id) %>% unique()
+## features <- feature_vals %>% dplyr::pull(feature_id) %>% unique()
 message("done")
 
 ##------------------
