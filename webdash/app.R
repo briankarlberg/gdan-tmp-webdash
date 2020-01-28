@@ -42,6 +42,10 @@ ui <- dashboardPage(
         ),
         conditionalPanel(
             "input.tabs == 'features'",
+            # selectizeInput(inputId = "feature_set_selection",
+            #                label = "Limit to Feature Set(s)",
+            #                choices = NULL,
+            #                multiple = T),
             selectizeInput(inputId = "feature_selection",
                            label = "Select Features(s)",
                            choices = NULL,
@@ -59,22 +63,33 @@ ui <- dashboardPage(
                         withSpinner(DT::DTOutput("modelTable"))
                         )
                     ),
-                    box(
+                    tabBox(
+                        title = "Selected",
+                        side = "right",
+                        selected = "Models",
                         width = 4,
-                        title = "Selected Models",
-                        div(style = 'height: 403px; overflow-y: auto',
-                            uiOutput("selectedModelsBox")
+                        tabPanel(
+                            "Features",
+                            div(style = 'height: 439px; overflow-y: auto',
+                                uiOutput("selectedFeaturesBox")
+                            ),
+                        ),
+                        tabPanel(
+                            "Models",
+                            div(style = 'height: 439px; overflow-y: auto',
+                                uiOutput("selectedModelsBox")
+                            ),
                         )
                     ),
                     box(
                         width = 4,
                         title = "Total Features",
-                        textOutput("totalFeaturesBox")
+                        h3(textOutput("totalFeaturesBox"))
                     ),
                     box(
                         width = 4,
                         title = "Mean TPR",
-                        textOutput("classificationErrorBox")
+                        h3(textOutput("classificationErrorBox"))
                     ),
                     box(
                         width = 4,
@@ -232,11 +247,11 @@ server <- function(input, output, session) {
                     dplyr::select(cancer_id, model_id, featureset_id, type, tpr) %>%
                     tidyr::spread(type, tpr),
                 predictions() %>%
-                    dplyr::select(cancer_id, model_id, featureset_id, prediction_id) %>%
+                    dplyr::select(cancer_id, model_id, featureset_id, date, prediction_id) %>%
                     dplyr::distinct()
             ) %>%
                 dplyr::rename(Project = cancer_id, Model = model_id, Features = featureset_id,
-                              TPR_Training = training, TPR_Testing = testing),
+                              Date = date, TPR_Training = training, TPR_Testing = testing),
             featureSets() %>%
                 dplyr::group_by(featureset_id, cancer_id) %>%
                 dplyr::summarize(N_Features = n()) %>%
@@ -256,7 +271,7 @@ server <- function(input, output, session) {
     })
 
     output$modelTable <- DT::renderDT({
-        model_summary() %>% dplyr::select(-Model_Rank, -prediction_id)
+        model_summary() %>% dplyr::select(-Model_Rank, -Date, -prediction_id)
     },
     filter = "top",
     rownames = FALSE,
@@ -267,14 +282,14 @@ server <- function(input, output, session) {
 
     output$selectedModelsBox <- renderUI({
         if (length(input$modelTable_rows_selected) > 0) {
-            selected_models <- model_summary() %>%
+            selected <- model_summary() %>%
                 dplyr::slice(input$modelTable_rows_selected) %>%
-                dplyr::pull(Model) %>%
-                paste(collapse = "<br/>")
+                dplyr::pull(prediction_id) %>%
+                paste(collapse = "<br/><br/>")
             shiny::HTML(
                 sprintf(
                     "<div>%s</div>",
-                    selected_models
+                    selected
                 )
             )
         }
@@ -294,21 +309,38 @@ server <- function(input, output, session) {
             mean()
     })
 
-    selected_features <- reactive({
-        fsets <- model_summary() %>%
-            dplyr::slice(input$modelTable_rows_selected) %>%
-            dplyr::pull(Features)
-        projects <- model_summary() %>%
-            dplyr::slice(input$modelTable_rows_selected) %>%
-            dplyr::pull(Project)
+    selected_panel_features <- reactive({
+        inner_join(
+            model_summary() %>%
+                dplyr::slice(input$modelTable_rows_selected) %>%
+                dplyr::select(featureset_id = Features, cancer_id = Project),
+            featureSets()
+        )
+    })
 
-        featureSets() %>%
-            filter(featureset_id %in% fsets,
-                   cancer_id %in% projects)
+    output$selectedFeaturesBox <- renderUI({
+        if (length(input$modelTable_rows_selected) > 0) {
+            selected <- selected_panel_features() %>%
+                dplyr::group_by(cancer_id, featureset_id) %>%
+                dplyr::summarize(feats = paste(feature_id, collapse = "<br/>")) %>%
+                dplyr::mutate(
+                    html = sprintf(
+                        "<b>%s %s</b><br/>%s", cancer_id, featureset_id, feats
+                    ),
+                ) %>%
+                dplyr::pull(html) %>%
+                paste(collapse = "<br/><br/>")
+            shiny::HTML(
+                sprintf(
+                    "<div>%s</div>",
+                    selected
+                )
+            )
+        }
     })
 
     output$featureTypeBox <- renderPlotly({
-        selected_features() %>%
+        selected_panel_features() %>%
             tidyr::separate(feature_id,
                             sep = "\\:",
                             into = c("datatype", "platform1", "platform2", "featureid1", "featureid2", "extra"),
@@ -326,7 +358,7 @@ server <- function(input, output, session) {
     })
 
     output$featureFreqBox <- renderPlotly({
-        fcount <- selected_features() %>%
+        fcount <- selected_panel_features() %>%
             dplyr::group_by(feature_id) %>%
             dplyr::summarize(model_occurence = as.factor(n())) %>%
             dplyr::ungroup() %>%
@@ -353,7 +385,7 @@ server <- function(input, output, session) {
         sub_perf <- predictions() %>%
             dplyr::filter(prediction_id %in% selected,
                           type == "testing") %>%
-            dplyr::group_by(cancer_id, model_id, featureset_id, `repeat`, fold, actual_value) %>%
+            dplyr::group_by(cancer_id, model_id, featureset_id, `repeat`, actual_value) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
                              total = n()) %>%
             dplyr::ungroup() %>%
@@ -447,7 +479,8 @@ server <- function(input, output, session) {
         } else {
             hm <- hm %>% add_row_title("Models", font = list(size = 20))
         }
-        hm %>% modify_layout(list(height = 400 + 15*dim(pred_mat)[1]))
+        hm %>% modify_layout(list(height = 400 + 15*dim(pred_mat)[1],
+                                  autosize = TRUE))
     })
 
     output$featureFreq <- renderPlotly({

@@ -9,11 +9,13 @@ preds <- foreach(f = output_files[1:3], .combine = dplyr::bind_rows) %do% {
     dplyr::rename(sample_id = Sample_ID, `repeat` = Repeat, fold = Fold, actual_value = Label, type = Test) %>%
     tidyr::separate(prediction_id, sep = "\\|", into = c("model_id", "featureset_id", "date", "ptype"), remove = F) %>%
     tidyr::separate(actual_value, sep = ":", into = c("cancer_id", "extra"), remove = F) %>%
-    dplyr::select(-date, -ptype, -extra) %>%
+    dplyr::select(-ptype, -extra) %>%
     dplyr::mutate(type = ifelse(type == 1, "testing", "training"))
 } %>%
   dplyr::mutate(predicted_value = as.factor(predicted_value),
-                actual_value = as.factor(actual_value))
+                actual_value = as.factor(actual_value),
+                date = as.Date(date)) %>%
+  tidyr::separate(model_id, "\\:", into = c("cancer_id", "model_id"))
 
 feature_sets_file <- "/Users/strucka/Projects/gdan-tmp-webdash/data/struck-outputs/featuresets_struck.tsv"
 feature_sets <- data.table::fread(feature_sets_file) %>%
