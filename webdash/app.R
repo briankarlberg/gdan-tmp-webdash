@@ -5,20 +5,32 @@ library(iheatmapr)
 library(plotly)
 library(dplyr)
 
-source("helpers.R")
 
 ##-------------------------
 ## Global variables
 ##-------------------------
-cancers <- getCancers()
-features <- getFeatures()
+DEFAULT_GRAPH <- ifelse(Sys.getenv("GDAN_TMP_GRAPH") == "", "gdan_tmp", Sys.getenv("GDAN_TMP_GRAPH"))
+DEFAULT_GRIP_HOST <- ifelse(Sys.getenv("GRIP_HOST") == "", "localhost:8201", Sys.getenv("GRIP_HOST"))
 
+message("GRIP HOST: ", DEFAULT_GRIP_HOST)
+message("GRAPH: ", DEFAULT_GRAPH)
+
+hclustfunc <- function(x, method = "complete", dmeth = "euclidean") {
+  hclust(dist(x, method = dmeth), method = method)
+}
+
+# source("helpers.R")
+# cancers <- getCancers()
+# features <- getFeatures()
 # featureSets <- getFeatureSets(NULL)
 # predictions <- getPredictions(NULL)
 
-source("load_test_data.R")
-featureSets <- feature_sets
-predictions <- preds
+source("load_data.R")
+# creates variables:
+# predictions
+# featureSets
+# feature_con
+# cancers
 
 model_summary <- dplyr::left_join(
     dplyr::left_join(
@@ -50,6 +62,7 @@ model_summary <- dplyr::left_join(
 
 selected_models <- which(paste(model_summary$Project, model_summary$Model_Rank, sep = "|") %in% paste(cancers, 1,  sep = "|"))
 
+message("selected models: ", selected_models)
 
 ##-------------------------
 ## UI
@@ -215,15 +228,28 @@ server <- function(input, output, session) {
     ## Sidebar filters
     ##--------------------
 
+    observeEvent(input$cancer_selection, {
+        if (input$cancer_selection == "") {
+            return()
+        }
+        features <- feature_con %>%
+               dplyr::tbl(sprintf("%s_features", input$cancer_selection)) %>%
+               dplyr::select(feature_id) %>%
+               dplyr::collect() %>%
+               pull(feature_id)
+
+        updateSelectizeInput(session = session,
+                             inputId = 'feature_selection',
+                             choices = features,
+                             server = TRUE)
+    })
+
     updateSelectizeInput(session = session,
                          inputId = 'cancer_selection',
                          choices = cancers,
                          server = FALSE)
 
-    updateSelectizeInput(session = session,
-                         inputId = 'feature_selection',
-                         choices = features,
-                         server = TRUE)
+
 
     observe({
         updateSelectizeInput(session = session,
@@ -510,11 +536,13 @@ server <- function(input, output, session) {
 
     ## See https://stackoverflow.com/questions/16389636/in-ggplot2-how-can-i-add-additional-legend
 
+    sample_sel <- debounce(reactive({input$sample_selection}), millis = 500)
+
     output$samplePredDetails <- renderPlotly({
-        if (length(input$sample_selection) > 0) {
+        if (length(sample_sel()) > 0) {
             df_subset <- cancer_preds() %>%
                 dplyr::filter(type == input$set_selection) %>%
-                dplyr::filter(sample_id %in% input$sample_selection) %>%
+                dplyr::filter(sample_id %in% sample_sel()) %>%
                 dplyr::mutate(sample_label = paste(sample_id, actual_value, sep = " - Subtype: "))
             g <- ggplot(df_subset, aes(x = prediction_id)) +
                 geom_bar(aes(fill = predicted_value), position = "fill") +
@@ -529,7 +557,7 @@ server <- function(input, output, session) {
                 facet_wrap(~sample_label, ncol = 2)
             ggplotly(
                 g,
-                height = 400 + 10*length(unique(df_subset$prediction_id))*ceiling(length(input$sample_selection)/2)
+                height = 400 + 10*length(unique(df_subset$prediction_id))*ceiling(length(sample_sel())/2)
             )
         } else {
             g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Samples"),
@@ -543,56 +571,42 @@ server <- function(input, output, session) {
     ##---------------------------
     ## Feature Distributions Tab
     ##---------------------------
-    feature_subset <- reactiveVal(tibble())
-
-    observeEvent(length(input$feature_selection), {
-        if (length(input$feature_selection) > 0) {
-            vals <- getFeatureVals(input$feature_selection)
-            # vals <- feature_vals %>% dplyr::filter(feature_id %in% input$feature_selection)
-            feature_subset(vals)
-        } else {
-            feature_subset(tibble())
-        }
-    })
+    feat_sel <- debounce(reactive({input$feature_selection}), millis = 1000)
 
     # TODO change cancer filter to allow for multiple selections
-    observeEvent(c(dim(feature_subset())[1], input$cancer_selection), {
-        if (dim(feature_subset())[1] > 0) {
-            sub <- dplyr::inner_join(
-                predictions %>%
-                    dplyr::filter(cancer_id == input$cancer_selection) %>%
-                    dplyr::select(sample_id, subtype_id = actual_value) %>%
-                    dplyr::distinct(),
-                feature_subset()
-            )
+    output$featureDetails <- renderPlotly({
+        feats <- feat_sel()
+        if (length(feats) > 0) {
+            sub <- feature_con %>%
+               dplyr::tbl(input$cancer_selection) %>%
+               dplyr::filter(feature_id %in% feats) %>%
+               dplyr::collect() %>%
+               dplyr::rename(subtype_id = subtype)
+
             nfeatures <- length(unique(sub$feature_id))
-            
-            output$featureDetails <- renderPlotly({
-                g <- ggplot(sub,
-                            aes(x = subtype_id,
-                                y = value,
-                                fill = subtype_id)) +
-                    geom_violin(colour = NA, na.rm = T, alpha = 0.5) +
-                    geom_jitter(width = 0.05, height = 0.05) +
-                    coord_flip() +
-                    labs(y = "", x = "", fill = "") +
-                    theme_minimal() +
-                    theme(axis.text.y = element_blank()) +
-                    facet_wrap(~feature_id, ncol = 2, scales = "free_x")
-                ggplotly(
-                    g,
-                    tooltip = c("x", "y"),
-                    height = 300*ceiling(nfeatures/2)
-                )               
-            })
+
+            g <- ggplot(sub,
+                        aes(x = subtype_id,
+                            y = value,
+                            fill = subtype_id)) +
+                geom_violin(colour = NA, na.rm = T, alpha = 0.5) +
+                geom_jitter(width = 0.05, height = 0.05) +
+                coord_flip() +
+                labs(y = "", x = "", fill = "") +
+                theme_minimal() +
+                theme(axis.text.y = element_blank()) +
+                facet_wrap(~feature_id, ncol = 2, scales = "free_x")
+            ggplotly(
+                g,
+                tooltip = c("x", "y"),
+                height = 300*ceiling(nfeatures/2)
+            )
         } else {
-            output$featureDetails <- renderPlotly({
-                g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Features"),
-                            aes(x, y)) +
-                    geom_text(aes(label = z), size = 10) +
-                    theme_void()
-                ggplotly(g, height = 400)
-            })
+            g <- ggplot(data.frame(x = 1, y = 1, z = "Select One or More Features"),
+                        aes(x, y)) +
+                geom_text(aes(label = z), size = 10) +
+                theme_void()
+            ggplotly(g, height = 400)
         }
     })
 
