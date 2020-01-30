@@ -1,5 +1,9 @@
 Database: mongo
 
+Server:
+  RequestLogging:
+    Enable: true
+
 MongoDB:
   URL: mongo:27017
   DBName: grip
