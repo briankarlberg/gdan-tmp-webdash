@@ -2,7 +2,7 @@ library(foreach)
 library(magrittr)
 
 message("loading prediction files...")
-output_files <- list.files("/mnt/data/struck-outputs", "randomforest", full.names = T)
+output_files <- list.files("/mnt/data/predictions", full.names = T)
 predictions <- foreach(f = output_files, .combine = dplyr::bind_rows) %do% {
   data.table::fread(f) %>%
     dplyr::as_tibble() %>%
@@ -19,7 +19,7 @@ predictions <- foreach(f = output_files, .combine = dplyr::bind_rows) %do% {
   tidyr::separate(model_id, "\\:", into = c("cancer_id", "model_id"))
 
 message("loading feature set files...")
-feature_sets_file <- "/mnt/data/struck-outputs/featuresets_struck.tsv"
+feature_sets_file <- "/mnt/data/feature-sets/featuresets_struck.tsv"
 featureSets <- data.table::fread(feature_sets_file) %>%
   dplyr::as_tibble() %>%
   dplyr::mutate(Features = purrr::map(Features, jsonlite::fromJSON),
