@@ -4,8 +4,6 @@ services:
   mongo:
     image: mongo:4.2.2
     container_name: mongo
-    # security_opt:
-    #   - seccomp:unconfined
     privileged: true
     command:
       - "numactl"
@@ -26,6 +24,16 @@ services:
     ports:
       - 8201:8201
       - 8202:8202
+    depends_on:
+      - mongo
+
+  etl:
+    build: graph-etl
+    container_name: etl
+    environment:
+      GRIP_HOST: grip:8201
+    volumes:
+      - ./data/:/etl/data
     depends_on:
       - mongo
 

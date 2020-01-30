@@ -1,21 +1,11 @@
-import io
-import os
 from setuptools import setup
-
-
-def read(*names, **kwargs):
-    with io.open(
-        os.path.join(os.path.dirname(__file__), *names),
-        encoding=kwargs.get("encoding", "utf8")
-    ) as fp:
-        return fp.read()
 
 
 setup(
     name="gdan_tmp_etl",
     version="0.1.0",
     description="",
-    long_description=read('README.md'),
+    long_description="",
     long_description_content_type='text/markdown',
     url="https://github.com/bmeg/gdan-tmp-etl",
     license="MIT",
