@@ -43,6 +43,7 @@ services:
     environment:
       GRIP_HOST: grip:8201
       GDAN_TMP_GRAPH: gdan_tmp
+    command: ["R", "-e", "shiny::runApp('/srv/shiny-server/GDAN-TMP', host = '0.0.0.0', port = 3838)"]
     volumes:
       - ./configs/shiny-server.conf:/etc/shiny-server/shiny-server.conf
       - ./webdash:/srv/shiny-server/GDAN-TMP:ro
