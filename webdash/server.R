@@ -14,10 +14,6 @@ function(input, output, session) {
     message("HTTP_REMOTE_ROLES: ", session$request$HTTP_REMOTE_ROLES)
     message("HTTP_USER_AGENT: ", session$request$HTTP_USER_AGENT)
 
-    ## suppress warnings  
-    storeWarn<- getOption("warn")
-    options(warn = -1) 
-    
     ##--------------------
     ## Sidebar filters
     ##--------------------
@@ -27,10 +23,10 @@ function(input, output, session) {
             return()
         }
         features <- feature_con %>%
-               dplyr::tbl(sprintf("%s_features", input$cancer_selection)) %>%
-               dplyr::select(feature_id) %>%
-               dplyr::collect() %>%
-               pull(feature_id)
+            dplyr::tbl(sprintf("%s_features", input$cancer_selection)) %>%
+            dplyr::select(feature_id) %>%
+            dplyr::collect() %>%
+            pull(feature_id)
 
         updateSelectizeInput(session = session,
                              inputId = 'feature_selection',
@@ -98,11 +94,11 @@ function(input, output, session) {
             dplyr::pull(prediction_id) %>%
             paste(collapse = "<br/><br/>")
         shiny::HTML(
-                   sprintf(
-                       "<div>%s</div>",
-                       selected
-                   )
-               )
+            sprintf(
+                "<div>%s</div>",
+                selected
+            )
+        )
     })
 
     output$totalFeaturesBox <- renderText({
@@ -132,10 +128,10 @@ function(input, output, session) {
         suppressMessages({
             inner_join(
                 model_summary %>%
-                dplyr::slice(input$modelTable_rows_selected) %>%
-                dplyr::select(featureset_id = Features, cancer_id = Project),
+                    dplyr::slice(input$modelTable_rows_selected) %>%
+                    dplyr::select(featureset_id = Features, cancer_id = Project),
                 featureSets
-            )            
+            )
         })
     })
 
@@ -147,18 +143,18 @@ function(input, output, session) {
             dplyr::group_by(cancer_id, featureset_id) %>%
             dplyr::summarize(feats = paste(feature_id, collapse = "<br/>")) %>%
             dplyr::mutate(
-                       html = sprintf(
-                           "<b>%s %s</b><br/>%s", cancer_id, featureset_id, feats
-                       ),
-                       ) %>%
+                html = sprintf(
+                    "<b>%s %s</b><br/>%s", cancer_id, featureset_id, feats
+                ),
+            ) %>%
             dplyr::pull(html) %>%
             paste(collapse = "<br/><br/>")
         shiny::HTML(
-                   sprintf(
-                       "<div>%s</div>",
-                       selected
-                   )
-               )
+            sprintf(
+                "<div>%s</div>",
+                selected
+            )
+        )
     })
 
     output$featureTypeBox <- renderPlotly({
@@ -186,7 +182,7 @@ function(input, output, session) {
         if (is.null(selected_panel_features())) {
             return()
         }
-        
+
         fcount <- selected_panel_features() %>%
             dplyr::group_by(feature_id) %>%
             dplyr::summarize(model_occurence = as.factor(n())) %>%
@@ -209,7 +205,7 @@ function(input, output, session) {
         if (length(input$modelTable_rows_selected) == 0) {
             return()
         }
-        
+
         selected <- model_summary %>%
             dplyr::slice(input$modelTable_rows_selected) %>%
             dplyr::pull(prediction_id)
@@ -319,9 +315,9 @@ function(input, output, session) {
         fset <- featureSets %>% dplyr::filter(cancer_id  == input$cancer_selection)
         suppressMessages({
             fset_sub <- dplyr::left_join(
-                                   fset,
-                                   fset %>% dplyr::count(feature_id, name = "count")
-                               ) %>%
+                fset,
+                fset %>% dplyr::count(feature_id, name = "count")
+            ) %>%
                 dplyr::select(feature_id, count, featureset_id) %>%
                 dplyr::distinct() %>%
                 dplyr::group_by(feature_id, count) %>%
@@ -397,10 +393,10 @@ function(input, output, session) {
         feats <- feat_sel()
         if (length(feats) > 0) {
             sub <- feature_con %>%
-               dplyr::tbl(input$cancer_selection) %>%
-               dplyr::filter(feature_id %in% feats) %>%
-               dplyr::collect() %>%
-               dplyr::rename(subtype_id = subtype)
+                dplyr::tbl(input$cancer_selection) %>%
+                dplyr::filter(feature_id %in% feats) %>%
+                dplyr::collect() %>%
+                dplyr::rename(subtype_id = subtype)
 
             nfeatures <- length(unique(sub$feature_id))
 

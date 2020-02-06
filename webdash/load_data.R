@@ -1,6 +1,6 @@
 suppressMessages({
-    library(foreach)
-    library(magrittr)
+  library(foreach)
+  library(magrittr)
 })
 
 
@@ -26,7 +26,7 @@ feature_sets_file <- "/mnt/data/feature-sets/featuresets_struck.tsv"
 featureSets <- data.table::fread(feature_sets_file) %>%
   dplyr::as_tibble() %>%
   dplyr::mutate(Features = purrr::map(Features, jsonlite::fromJSON),
-         TCGA_Projects = purrr::map(TCGA_Projects, jsonlite::fromJSON)) %>%
+                TCGA_Projects = purrr::map(TCGA_Projects, jsonlite::fromJSON)) %>%
   tidyr::unnest(TCGA_Projects) %>%
   tidyr::unnest(Features) %>%
   dplyr::rename(featureset_id = Feature_Set_ID,

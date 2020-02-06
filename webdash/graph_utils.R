@@ -1,17 +1,9 @@
-library(dplyr)
-library(stringr)
-library(rlist)
-library(gripql)
-
-DEFAULT_GRAPH <- ifelse(Sys.getenv("GDAN_TMP_GRAPH") == "", "gdan_tmp", Sys.getenv("GDAN_TMP_GRAPH"))
-DEFAULT_GRIP_HOST <- ifelse(Sys.getenv("GRIP_HOST") == "", "localhost:8201", Sys.getenv("GRIP_HOST"))
-
-message("GRIP HOST: ", DEFAULT_GRIP_HOST)
-message("GRAPH: ", DEFAULT_GRAPH)
-
-hclustfunc <- function(x, method = "complete", dmeth = "euclidean") {
-  hclust(dist(x, method = dmeth), method = method)
-}
+suppressMessages({
+  library(dplyr)
+  library(stringr)
+  library(rlist)
+  library(gripql)
+})
 
 getCancers <- function(graph_name = DEFAULT_GRAPH, grip_host = DEFAULT_GRIP_HOST) {
   gripql(grip_host) %>%
