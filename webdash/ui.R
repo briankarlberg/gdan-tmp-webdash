@@ -1,8 +1,10 @@
-library(shiny)
-library(shinydashboard)
-library(shinycssloaders)
-library(plotly)
-library(iheatmapr)
+suppressMessages({
+    library(shiny)
+    library(shinydashboard)
+    library(shinycssloaders)
+    library(plotly)
+    library(iheatmapr)
+})
 
 ##-------------------------
 ## UI

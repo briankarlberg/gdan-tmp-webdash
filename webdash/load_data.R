@@ -1,9 +1,12 @@
-library(foreach)
-library(magrittr)
+suppressMessages({
+    library(foreach)
+    library(magrittr)
+})
+
 
 message("loading prediction files...")
 output_files <- list.files("/mnt/data/predictions", full.names = T)
-predictions <- foreach(f = output_files, .combine = dplyr::bind_rows) %do% {
+predictions <- foreach(f = output_files[1:2], .combine = dplyr::bind_rows) %do% {
   data.table::fread(f) %>%
     dplyr::as_tibble() %>%
     tidyr::gather(-Sample_ID, -Repeat, -Fold, -Test, -Label, key = "prediction_id", value = "predicted_value") %>%

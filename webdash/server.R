@@ -1,14 +1,22 @@
-library(shiny)
-library(iheatmapr)
-library(plotly)
-library(dplyr)
+suppressMessages({
+    library(shiny)
+    library(iheatmapr)
+    library(plotly)
+    library(dplyr)
+})
 
 
 # TODO: use the future and promises packages
 # https://blog.rstudio.com/2018/06/26/shiny-1-1-0/
 function(input, output, session) {
-    message("session: ", paste(ls(env=session$request), collapse=", "))
-    message("cookie: ", session$request$HTTP_COOKIE)
+    # message("request: ", paste(ls(env=session$request), collapse=", "))
+    message("HTTP_REMOTE_USER: ", session$request$HTTP_REMOTE_USER)
+    message("HTTP_REMOTE_ROLES: ", session$request$HTTP_REMOTE_ROLES)
+    message("HTTP_USER_AGENT: ", session$request$HTTP_USER_AGENT)
+
+    ## suppress warnings  
+    storeWarn<- getOption("warn")
+    options(warn = -1) 
     
     ##--------------------
     ## Sidebar filters
@@ -27,6 +35,7 @@ function(input, output, session) {
         updateSelectizeInput(session = session,
                              inputId = 'feature_selection',
                              choices = features,
+                             selected = input$selected_features,
                              server = TRUE)
     })
 
@@ -81,21 +90,25 @@ function(input, output, session) {
     ))
 
     output$selectedModelsBox <- renderUI({
-        if (length(input$modelTable_rows_selected) > 0) {
-            selected <- model_summary %>%
-                dplyr::slice(input$modelTable_rows_selected) %>%
-                dplyr::pull(prediction_id) %>%
-                paste(collapse = "<br/><br/>")
-            shiny::HTML(
-                sprintf(
-                    "<div>%s</div>",
-                    selected
-                )
-            )
+        if (length(input$modelTable_rows_selected) == 0) {
+            return()
         }
+        selected <- model_summary %>%
+            dplyr::slice(input$modelTable_rows_selected) %>%
+            dplyr::pull(prediction_id) %>%
+            paste(collapse = "<br/><br/>")
+        shiny::HTML(
+                   sprintf(
+                       "<div>%s</div>",
+                       selected
+                   )
+               )
     })
 
     output$totalFeaturesBox <- renderText({
+        if (length(input$modelTable_rows_selected) == 0) {
+            return()
+        }
         model_summary %>%
             dplyr::slice(input$modelTable_rows_selected) %>%
             dplyr::pull(N_Features) %>%
@@ -103,6 +116,9 @@ function(input, output, session) {
     })
 
     output$classificationErrorBox <- renderText({
+        if (length(input$modelTable_rows_selected) == 0) {
+            return()
+        }
         model_summary %>%
             dplyr::slice(input$modelTable_rows_selected) %>%
             dplyr::pull(TPR_Testing) %>%
@@ -110,36 +126,45 @@ function(input, output, session) {
     })
 
     selected_panel_features <- reactive({
-        inner_join(
-            model_summary %>%
+        if (length(input$modelTable_rows_selected) == 0) {
+            return()
+        }
+        suppressMessages({
+            inner_join(
+                model_summary %>%
                 dplyr::slice(input$modelTable_rows_selected) %>%
                 dplyr::select(featureset_id = Features, cancer_id = Project),
-            featureSets
-        )
+                featureSets
+            )            
+        })
     })
 
     output$selectedFeaturesBox <- renderUI({
-        if (length(input$modelTable_rows_selected) > 0) {
-            selected <- selected_panel_features() %>%
-                dplyr::group_by(cancer_id, featureset_id) %>%
-                dplyr::summarize(feats = paste(feature_id, collapse = "<br/>")) %>%
-                dplyr::mutate(
-                    html = sprintf(
-                        "<b>%s %s</b><br/>%s", cancer_id, featureset_id, feats
-                    ),
-                ) %>%
-                dplyr::pull(html) %>%
-                paste(collapse = "<br/><br/>")
-            shiny::HTML(
-                sprintf(
-                    "<div>%s</div>",
-                    selected
-                )
-            )
+        if (length(input$modelTable_rows_selected) == 0) {
+            return()
         }
+        selected <- selected_panel_features() %>%
+            dplyr::group_by(cancer_id, featureset_id) %>%
+            dplyr::summarize(feats = paste(feature_id, collapse = "<br/>")) %>%
+            dplyr::mutate(
+                       html = sprintf(
+                           "<b>%s %s</b><br/>%s", cancer_id, featureset_id, feats
+                       ),
+                       ) %>%
+            dplyr::pull(html) %>%
+            paste(collapse = "<br/><br/>")
+        shiny::HTML(
+                   sprintf(
+                       "<div>%s</div>",
+                       selected
+                   )
+               )
     })
 
     output$featureTypeBox <- renderPlotly({
+        if (is.null(selected_panel_features())) {
+            return()
+        }
         selected_panel_features() %>%
             tidyr::separate(feature_id,
                             sep = "\\:",
@@ -158,6 +183,10 @@ function(input, output, session) {
     })
 
     output$featureFreqBox <- renderPlotly({
+        if (is.null(selected_panel_features())) {
+            return()
+        }
+        
         fcount <- selected_panel_features() %>%
             dplyr::group_by(feature_id) %>%
             dplyr::summarize(model_occurence = as.factor(n())) %>%
@@ -177,7 +206,10 @@ function(input, output, session) {
     })
 
     output$performanceBox <- renderPlotly({
-
+        if (length(input$modelTable_rows_selected) == 0) {
+            return()
+        }
+        
         selected <- model_summary %>%
             dplyr::slice(input$modelTable_rows_selected) %>%
             dplyr::pull(prediction_id)
@@ -285,19 +317,20 @@ function(input, output, session) {
 
     output$featureFreq <- renderPlotly({
         fset <- featureSets %>% dplyr::filter(cancer_id  == input$cancer_selection)
-        fset_sub <- dplyr::left_join(
-            fset,
-            fset %>% dplyr::count(feature_id, name = "count")
-        ) %>%
-            dplyr::select(feature_id, count, featureset_id) %>%
-            dplyr::distinct() %>%
-            dplyr::group_by(feature_id, count) %>%
-            dplyr::summarise(feature_sets = toString(featureset_id)) %>%
-            dplyr::ungroup() %>%
-            dplyr::arrange(desc(count)) %>%
-            dplyr::mutate(feature_id = reorder(feature_id, -count)) %>%
-            dplyr::filter(count >= input$nmodels)
-
+        suppressMessages({
+            fset_sub <- dplyr::left_join(
+                                   fset,
+                                   fset %>% dplyr::count(feature_id, name = "count")
+                               ) %>%
+                dplyr::select(feature_id, count, featureset_id) %>%
+                dplyr::distinct() %>%
+                dplyr::group_by(feature_id, count) %>%
+                dplyr::summarise(feature_sets = toString(featureset_id)) %>%
+                dplyr::ungroup() %>%
+                dplyr::arrange(desc(count)) %>%
+                dplyr::mutate(feature_id = reorder(feature_id, -count)) %>%
+                dplyr::filter(count >= input$nmodels)
+        })
         if (dim(fset_sub)[1] > 0) {
             g <- fset_sub %>%
                 ggplot(aes(feature_id, count)) +

@@ -54,4 +54,4 @@ model_summary <- dplyr::left_join(
 
 selected_models <- which(paste(model_summary$Project, model_summary$Model_Rank, sep = "|") %in% paste(cancers, 1,  sep = "|"))
 
-message("selected models: ", selected_models)
+message("selected models: ", paste(selected_models, collapse = ", "))
