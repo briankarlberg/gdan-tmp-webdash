@@ -7,9 +7,11 @@ library(dplyr)
 # TODO: use the future and promises packages
 # https://blog.rstudio.com/2018/06/26/shiny-1-1-0/
 function(input, output, session) {
-    message("session: ", paste(ls(env=session$request), collapse=", "))
-    message("cookie: ", session$request$HTTP_COOKIE)
-    
+    # message("session: ", paste(ls(env=session$request), collapse=", "))
+    # message("cookie: ", session$request$HTTP_COOKIE)
+    message("HTTP_REMOTE_USER: ", session$request$HTTP_REMOTE_USER)
+    message("HTTP_REMOTE_ROLES: ", session$request$HTTP_REMOTE_ROLES)
+
     ##--------------------
     ## Sidebar filters
     ##--------------------
