@@ -185,10 +185,10 @@ function(input, output, session) {
 
         fcount <- selected_panel_features() %>%
             dplyr::group_by(feature_id) %>%
-            dplyr::summarize(model_occurence = as.factor(n())) %>%
+            dplyr::summarize(model_occurence = as.factor(dplyr::n())) %>%
             dplyr::ungroup() %>%
             dplyr::group_by(model_occurence) %>%
-            dplyr::summarize(count = n())
+            dplyr::summarize(count = dplyr::n())
 
         g <- ggplot(fcount, aes(model_occurence, count)) +
             geom_bar(stat = "identity") +
@@ -215,7 +215,7 @@ function(input, output, session) {
                           type == "testing") %>%
             dplyr::group_by(cancer_id, model_id, featureset_id, `repeat`, actual_value) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                             total = n()) %>%
+                             total = dplyr::n()) %>%
             dplyr::ungroup() %>%
             dplyr::mutate(tpr = round(correct / total, digits = 3)) %>%
             dplyr::rename(Subtype = actual_value, TPR = tpr)
@@ -266,7 +266,7 @@ function(input, output, session) {
             dplyr::filter(type == input$set_selection) %>%
             dplyr::group_by(prediction_id) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                             total = n()) %>%
+                             total = dplyr::n()) %>%
             dplyr::mutate(tpr = correct / total) %>%
             dplyr::arrange(base::match(prediction_id, rownames(pred_mat))) %>%
             dplyr::pull(tpr)
@@ -275,7 +275,7 @@ function(input, output, session) {
             dplyr::filter(type == input$set_selection) %>%
             dplyr::group_by(sample_id) %>%
             dplyr::summarize(correct = table(as.numeric(predicted_value) == as.numeric(actual_value))["TRUE"],
-                             total = n()) %>%
+                             total = dplyr::n()) %>%
             dplyr::mutate(tpr = correct / total) %>%
             dplyr::arrange(base::match(sample_id, colnames(pred_mat))) %>%
             dplyr::pull(tpr)
