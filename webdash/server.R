@@ -9,7 +9,6 @@ suppressMessages({
 # TODO: use the future and promises packages
 # https://blog.rstudio.com/2018/06/26/shiny-1-1-0/
 function(input, output, session) {
-    # message("request: ", paste(ls(env=session$request), collapse=", "))
     message("HTTP_REMOTE_USER: ", session$request$HTTP_REMOTE_USER)
     message("HTTP_REMOTE_ROLES: ", session$request$HTTP_REMOTE_ROLES)
     message("HTTP_USER_AGENT: ", session$request$HTTP_USER_AGENT)
@@ -17,11 +16,13 @@ function(input, output, session) {
     ##--------------------
     ## Sidebar filters
     ##--------------------
+    feat_sel <- debounce(reactive({input$feature_selection}), millis = 1000)
 
     observeEvent(input$cancer_selection, {
         if (input$cancer_selection == "") {
             return()
         }
+        
         features <- feature_con %>%
             dplyr::tbl(sprintf("%s_features", input$cancer_selection)) %>%
             dplyr::select(feature_id) %>%
@@ -31,7 +32,7 @@ function(input, output, session) {
         updateSelectizeInput(session = session,
                              inputId = 'feature_selection',
                              choices = features,
-                             selected = input$selected_features,
+                             selected = feat_sel(),
                              server = TRUE)
     })
 
@@ -386,7 +387,6 @@ function(input, output, session) {
     ##---------------------------
     ## Feature Distributions Tab
     ##---------------------------
-    feat_sel <- debounce(reactive({input$feature_selection}), millis = 1000)
 
     # TODO change cancer filter to allow for multiple selections
     output$featureDetails <- renderPlotly({
