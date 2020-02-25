@@ -3,10 +3,9 @@ suppressMessages({
   library(magrittr)
 })
 
-
 message("loading prediction files...")
 output_files <- list.files("/mnt/data/predictions", full.names = T)
-predictions <- foreach(f = output_files[1:2], .combine = dplyr::bind_rows) %do% {
+predictions <- foreach(f = output_files, .combine = dplyr::bind_rows) %do% {
   data.table::fread(f) %>%
     dplyr::as_tibble() %>%
     tidyr::gather(-Sample_ID, -Repeat, -Fold, -Test, -Label, key = "prediction_id", value = "predicted_value") %>%
@@ -22,33 +21,21 @@ predictions <- foreach(f = output_files[1:2], .combine = dplyr::bind_rows) %do% 
   tidyr::separate(model_id, "\\:", into = c("cancer_id", "model_id"))
 
 message("loading feature set files...")
-feature_sets_file <- "/mnt/data/feature-sets/featuresets_struck.tsv"
-featureSets <- data.table::fread(feature_sets_file) %>%
-  dplyr::as_tibble() %>%
-  dplyr::mutate(Features = purrr::map(Features, jsonlite::fromJSON),
-                TCGA_Projects = purrr::map(TCGA_Projects, jsonlite::fromJSON)) %>%
-  tidyr::unnest(TCGA_Projects) %>%
-  tidyr::unnest(Features) %>%
-  dplyr::rename(featureset_id = Feature_Set_ID,
-                cancer_id = TCGA_Projects,
-                feature_id = Features)
-
-## feature_files <- list.files("/mnt/data/v7-matrices/", ".tsv", full.names = T)
-## message("loading feature matrices...")
-## feature_vals <- foreach(f = feature_files[1], .combine = dplyr::bind_rows) %do% {
-##   message(sprintf("loading %s", f))
-##   data.table::fread(f) %>%
-##     dplyr::as_tibble() %>%
-##     dplyr::rename(Sample_ID = 1) %>%
-##     dplyr::select(-Labels) %>%
-##     tidyr::gather(-Sample_ID, key = "feature_id", value = "value")
-## } %>%
-##   dplyr::rename(sample_id = Sample_ID)
-
-## features <- feature_vals %>% dplyr::pull(feature_id) %>% unique()
+featureset_files <- list.files("/mnt/data/feature-sets", full.names = T)
+featureSets <- foreach(f = featureset_files, .combine = dplyr::bind_rows) %do% {
+    data.table::fread(f) %>%
+        dplyr::as_tibble() %>%
+            dplyr::mutate(Features = purrr::map(Features, jsonlite::fromJSON),
+                          TCGA_Projects = purrr::map(TCGA_Projects, jsonlite::fromJSON)) %>%
+            tidyr::unnest(TCGA_Projects) %>%
+            tidyr::unnest(Features) %>%
+            dplyr::rename(featureset_id = Feature_Set_ID,
+                          cancer_id = TCGA_Projects,
+                          feature_id = Features)
+}
 
 message("connecting to feature database...")
-feature_con <- DBI::dbConnect(RSQLite::SQLite(), "/mnt/data/features_by_cancer.sqlite")
+feature_con <- DBI::dbConnect(RSQLite::SQLite(), "/mnt/data/features.sqlite")
 
 message("getting cancer list...")
 cancers <- predictions %>% dplyr::pull(cancer_id) %>% unique()

@@ -1,10 +1,24 @@
+#!/usr/bin/env Rscript
+
+args <- commandArgs(trailingOnly=TRUE)
+
+if (length(args) != 2) {
+  stop("Two arguments must be supplied: <feature matrix directory> and <sqlite output name>", call.=FALSE)
+}
+
 library(DBI)
 library(dplyr)
 library(tidyr)
 
-feature_files <- list.files("./v7-matrices/", ".tsv", full.names = T)
+feature_dir <- args[1]
+output_db <- args[2]
 
-con <- dbConnect(RSQLite::SQLite(), "./features_by_cancer.sqlite")
+feature_files <- list.files(feature_dir, ".tsv", full.names = T)
+if (length(feature_files) == 0) {
+  stop("<feature matrix directory> contained no TSV files", call.=FALSE)
+}
+
+con <- dbConnect(RSQLite::SQLite(), output_db)
 
 i <- 1
 for (f in feature_files) {
