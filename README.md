@@ -5,7 +5,10 @@ https://www.synapse.org/#!Synapse:syn8011998/wiki/411602
 
 Project Home for CCG_TMP_AWG - https://www.synapse.org/#!Synapse:syn8011998/wiki/411602
 
-- Install the synapse python client: `pip install synapseclient`
+- Install the synapse python client: 
+  ```
+  pip install synapseclient boto3
+  ```
 - Download the V8 tarball: 
 
   ```
@@ -30,7 +33,7 @@ data/
 │   └── ...
 └── predictions
     ├── ACC_randomforest_200127.tsv
-    └── ,,,
+    └── ...
 ```
 
 ### Start the Shiny Application
