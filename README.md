@@ -8,7 +8,7 @@ https://www.synapse.org/#!Synapse:syn8011998/wiki/411602
 - Run the app
 
   ```
-  docker-compose up -d
+  docker-compose up
   ```
 
 The app will be available at [http://localhost:3838](http://localhost:3838).
