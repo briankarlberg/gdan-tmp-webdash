@@ -19,7 +19,7 @@ cl <- makeCluster(4, outfile = "")
 registerDoParallel(cl)
 
 message("loading prediction files...")
-output_files <- list.files("/mnt/data/predictions", recursive = T, full.names = T)
+output_files <- list.files("/mnt/data/predictions", recursive = T, full.names = T) %>% sort()
 if (length(output_files) == 0) {
   message("no prediction files were found!")
   predictions <- dplyr::tibble(
@@ -80,11 +80,12 @@ if (length(output_files) == 0) {
       if (dtypes$fold == "character") {
         tmp <- tmp %>% mutate(fold = as.integer(stringr::str_replace(fold, "F", "")))
       }
-      tryCatch({
-        tmp$date <- as.Date(tmp$date)
-      }, error = function(e) {
-        tmp$date <- NA
+      try({
+        tmp$date <- as.Date(parsedate::parse_iso_8601(tmp$date))
       })
+      if (class(tmp$date) == "character") {
+        tmp$date <- as.Date(NA)
+      }
       tmp
     },
     error = function(e) {
@@ -97,7 +98,7 @@ if (length(output_files) == 0) {
 }
 
 message("loading feature set files...")
-featureset_files <- list.files("/mnt/data/feature-sets", recursive = T, full.names = T)
+featureset_files <- list.files("/mnt/data/feature-sets", recursive = T, full.names = T) %>% sort()
 if (length(featureset_files) == 0) {
   message("no feature set files were found!")
   featureSets <- dplyr::tibble(
