@@ -1,3 +1,5 @@
+LOAD_THREADS <- ifelse(Sys.getenv("LOAD_THREADS") == "", 1, as.integer(Sys.getenv("LOAD_THREADS")))
+
 suppressMessages({
   library(foreach)
   library(magrittr)
@@ -15,7 +17,7 @@ cleanLabels <- function(labels) {
     })
 }
 
-cl <- makeCluster(4, outfile = "")
+cl <- makeCluster(LOAD_THREADS, outfile = "")
 registerDoParallel(cl)
 
 message("loading prediction files...")

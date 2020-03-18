@@ -41,6 +41,7 @@ services:
     build: shiny-server
     container_name: shiny
     environment:
+      LOAD_THREADS: 4
       GRIP_HOST: grip:8201
       GDAN_TMP_GRAPH: gdan_tmp
     command: ["R", "-e", "shiny::runApp('/srv/shiny-server/GDAN-TMP', host = '0.0.0.0', port = 3838)"]
